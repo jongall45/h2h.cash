@@ -173,13 +173,16 @@ export default function ContestDetailPage() {
   // Check contest status
   const isLive = contest.status === 'live'
   const isCompleted = contest.status === 'completed'
-  const gamesStarted = new Date(contest.gameTime) <= new Date()
+  
+  // CRITICAL: Only consider games started if ESPN confirms it via liveStatus
+  // Don't rely on comparing dates - use actual API response
+  // If liveStatus is null (not yet fetched), default to false (hidden)
+  const hasAnyGameStarted = liveStatus?.hasGamesStarted === true
   
   // NEW VISIBILITY LOGIC:
-  // Pre-game: ALL picks hidden (even your own to others)
-  // Once ANY game starts: FULL transparency - reveal everything to everyone
-  // Live leaderboard with real-time point fluctuations
-  const hasAnyGameStarted = liveStatus?.hasGamesStarted ?? gamesStarted
+  // Pre-game: ALL picks hidden, 0 points, 0 hits for everyone
+  // Once ESPN confirms ANY game has started: FULL transparency
+  // Contest status 'live' or 'completed' also reveals data
   const canRevealAllData = hasAnyGameStarted || isLive || isCompleted
 
   return (
@@ -288,13 +291,16 @@ export default function ContestDetailPage() {
           </div>
         </div>
 
-        {/* Pre-Game Notice - ALL picks hidden until kickoff */}
-        {contest.status === 'open' && !hasAnyGameStarted && (
+        {/* Pre-Game Notice - ALL picks hidden, 0 points until kickoff */}
+        {!canRevealAllData && (
           <div className="mb-8 p-4 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex items-center gap-4">
             <Lock size={20} className="text-blue-400 shrink-0" />
             <div>
-              <div className="font-bold text-blue-400">All Picks Locked & Hidden</div>
-              <div className="text-sm text-white/50">Everyone's picks are hidden until games begin. Once kickoff happens, all picks will be revealed and live scoring starts!</div>
+              <div className="font-bold text-blue-400">⏳ Waiting for Kickoff</div>
+              <div className="text-sm text-white/50">
+                All picks are locked and hidden. Everyone shows 0 points, 0/5 hits until games begin.
+                Once ESPN detects kickoff, picks will be revealed with live scoring!
+              </div>
             </div>
           </div>
         )}
@@ -385,42 +391,47 @@ export default function ContestDetailPage() {
                     // Check if this is the current user's entry
                     const isOwnEntry = currentUserId && entry.oduserId === currentUserId
                     
-                    // Get live pick results for this entry
-                    const entryResults = livePickResults.get(entry.id)
-                    const liveHits = entryResults?.filter(r => r.hit === true).length ?? 0
-                    const pending = entryResults?.filter(r => r.hit === null).length ?? 5
-                    
-                    // Calculate live points from ESPN data
+                    // PRE-GAME: Everything is 0 and hidden
+                    // LIVE: Show actual ESPN data
                     let displayPoints = 0
                     let displayHits = 0
+                    let pending = 5
                     
                     if (canRevealAllData) {
-                      // Games have started - show live data for everyone
+                      // Games have started - calculate from ESPN live data
+                      const entryResults = livePickResults.get(entry.id)
+                      
                       if (entryResults && entryResults.length > 0) {
+                        const liveHits = entryResults.filter(r => r.hit === true).length
+                        pending = entryResults.filter(r => r.hit === null).length
                         displayHits = liveHits
-                        // Calculate points: sum of hit picks * multiplier
+                        
+                        // Calculate points: sum of hit picks * multiplier (hits = multiplier)
                         let basePoints = 0
                         entryResults.forEach((result, i) => {
                           if (result.hit === true) {
                             basePoints += entry.picks[i]?.points ?? 0
                           }
                         })
+                        // Multiplier = number of hits
                         displayPoints = displayHits === 0 ? 0 : basePoints * displayHits
-                      } else {
-                        // Fallback to stored data
+                      } else if (isCompleted) {
+                        // Contest is complete, use stored final data
                         displayPoints = entry.totalPoints
                         displayHits = entry.hitsCount
+                        pending = 0
                       }
+                      // If live but no ESPN data yet, stays at 0
                     }
-                    // Pre-game: displayPoints and displayHits stay at 0 (hidden)
+                    // Pre-game: displayPoints = 0, displayHits = 0 (default values)
                     
-                    // Rank based on current points (dynamic during live)
-                    const currentRank = canRevealAllData ? (entry.rank || index + 1) : '—'
-                    const isTop3 = canRevealAllData && (entry.rank || index + 1) <= 3
-                    const isInMoney = isCompleted && (entry.rank || index + 1) <= paidPositions
+                    // Rank: Only show during live/completed, otherwise "—"
+                    const currentRank = canRevealAllData ? (index + 1) : '—'
+                    const isTop3 = canRevealAllData && (index + 1) <= 3
+                    const isInMoney = isCompleted && (index + 1) <= paidPositions
                     const prize = isInMoney ? Math.floor(contest.prizePool / paidPositions) : 0
                     
-                    // Can view picks once games start (full transparency)
+                    // Can view picks only once games start (full transparency)
                     const canViewPicks = canRevealAllData
                     
                     return (
@@ -488,8 +499,7 @@ export default function ContestDetailPage() {
                             </div>
                           ) : (
                             <div className="inline-flex items-center justify-center px-2 py-1 rounded-md text-xs font-bold bg-white/5 text-white/30">
-                              <Lock size={10} className="mr-1" />
-                              —
+                              0/5
                             </div>
                           )}
                         </div>
@@ -510,8 +520,8 @@ export default function ContestDetailPage() {
                               )}
                             </>
                           ) : (
-                            <div className="text-lg font-bold text-white/20" style={{ fontVariantNumeric: 'tabular-nums' }}>
-                              —
+                            <div className="text-lg font-bold text-white/30" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                              0.00
                             </div>
                           )}
                         </div>
@@ -677,9 +687,9 @@ export default function ContestDetailPage() {
                           key={index} 
                           pick={pick} 
                           index={index + 1} 
-                          gamesStarted={gamesStarted}
+                          isLive={canRevealAllData && !isCompleted}
                           liveResult={liveResult}
-                          contestCompleted={canRevealAllData}
+                          contestCompleted={isCompleted}
                         />
                       )
                     })}
@@ -734,17 +744,17 @@ export default function ContestDetailPage() {
   )
 }
 
-// Individual pick card for the modal with live data support
+// Individual pick card for the modal with live data support and progress bar
 function PickCard({ 
   pick, 
   index, 
-  gamesStarted,
+  isLive,
   liveResult,
   contestCompleted
 }: { 
   pick: EntryPick
   index: number
-  gamesStarted: boolean
+  isLive?: boolean
   liveResult?: PickResolutionResult
   contestCompleted?: boolean
 }) {
@@ -752,10 +762,12 @@ function PickCard({
   let status: 'pending' | 'live' | 'hit' | 'miss' = 'pending'
   let currentValue = 0
   let gameClock = ''
+  let progressPercent = 0
   
   if (liveResult) {
     currentValue = liveResult.currentValue
     gameClock = liveResult.gameClock || ''
+    progressPercent = Math.min((currentValue / pick.line) * 100, 100)
     
     if (liveResult.hit === true) {
       status = 'hit'
@@ -764,18 +776,25 @@ function PickCard({
     } else if (liveResult.gameStatus === 'in') {
       status = 'live'
     }
-  } else if (gamesStarted || contestCompleted) {
+  } else if (contestCompleted) {
     status = pick.hit === true ? 'hit' : pick.hit === false ? 'miss' : 'pending'
+    if (status === 'hit') progressPercent = 100
   }
   
   const statusConfig = {
-    pending: { color: '#888888', icon: '⏳', text: 'Pending', bgColor: 'rgba(255, 255, 255, 0.05)' },
-    live: { color: '#FFD700', icon: '🔴', text: gameClock || 'LIVE', bgColor: 'rgba(255, 215, 0, 0.1)' },
-    hit: { color: '#00FF00', icon: '✅', text: 'HIT', bgColor: 'rgba(0, 255, 0, 0.1)' },
-    miss: { color: '#ef4444', icon: '❌', text: 'MISS', bgColor: 'rgba(239, 68, 68, 0.1)' }
+    pending: { color: '#888888', icon: '⏳', text: 'Pending', bgColor: 'rgba(255, 255, 255, 0.03)' },
+    live: { color: '#FFD700', icon: '🔴', text: gameClock || 'LIVE', bgColor: 'rgba(255, 215, 0, 0.08)' },
+    hit: { color: '#00FF00', icon: '✅', text: 'HIT', bgColor: 'rgba(0, 255, 0, 0.08)' },
+    miss: { color: '#ef4444', icon: '❌', text: 'MISS', bgColor: 'rgba(239, 68, 68, 0.08)' }
   }
   
   const config = statusConfig[status]
+  
+  // Determine progress bar color based on status
+  const progressColor = status === 'hit' ? '#00FF00' : 
+                        status === 'miss' ? '#ef4444' : 
+                        progressPercent >= 80 ? '#00FF00' :
+                        progressPercent >= 50 ? '#FFD700' : '#888'
   
   return (
     <div 
@@ -788,10 +807,10 @@ function PickCard({
                      'rgba(255, 255, 255, 0.1)'
       }}
     >
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 mb-2">
         {/* Pick number */}
         <div 
-          className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold"
+          className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
           style={{ 
             backgroundColor: `${config.color}20`,
             color: config.color
@@ -803,14 +822,8 @@ function PickCard({
         {/* Player info */}
         <div className="flex-1 min-w-0">
           <div className="font-semibold text-white truncate">{pick.player}</div>
-          <div className="text-xs text-white/40 uppercase tracking-wide flex items-center gap-2">
-            <span>{pick.line}+ {pick.stat.replace(' Yards', '').replace('Passing', 'Pass').replace('Rushing', 'Rush').replace('Receiving', 'Rec')}</span>
-            {/* Show live current value */}
-            {status === 'live' && currentValue > 0 && (
-              <span className="text-yellow-400 font-medium">
-                ({currentValue} current)
-              </span>
-            )}
+          <div className="text-xs text-white/40 uppercase tracking-wide">
+            {pick.line}+ {pick.stat.replace(' Yards', '').replace('Passing', 'Pass').replace('Rushing', 'Rush').replace('Receiving', 'Rec')}
           </div>
         </div>
 
@@ -844,6 +857,30 @@ function PickCard({
           </div>
         </div>
       </div>
+
+      {/* Progress bar - only show during live games */}
+      {(status === 'live' || status === 'hit' || status === 'miss') && (
+        <div className="mt-2">
+          <div className="flex justify-between text-[10px] mb-1">
+            <span style={{ color: progressColor }} className="font-medium">
+              {currentValue} yds
+            </span>
+            <span className="text-white/40">
+              / {pick.line} needed
+            </span>
+          </div>
+          <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
+            <div 
+              className="h-full rounded-full transition-all duration-500"
+              style={{ 
+                width: `${progressPercent}%`,
+                backgroundColor: progressColor,
+                boxShadow: status === 'hit' ? '0 0 8px #00FF00' : 'none'
+              }}
+            />
+          </div>
+        </div>
+      )}
     </div>
   )
 }
