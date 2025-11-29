@@ -99,6 +99,12 @@ export function BettingCard({ player, team, opponent, stat, line, odds, type, al
     return odds > 0 ? `+${odds}` : `${odds}`
   }
 
+  // Format points with proper decimals
+  const formatPoints = (pts: number) => {
+    // Always show 2 decimal places for consistency
+    return pts.toFixed(2)
+  }
+
   // Get color based on risk
   const getRiskColor = (label: string) => {
     switch(label) {
@@ -300,9 +306,10 @@ export function BettingCard({ player, team, opponent, stat, line, odds, type, al
                 fontSize: '28px', 
                 fontWeight: 700, 
                 color: getRiskColor(riskLabel),
-                transition: 'color 0.2s'
+                transition: 'color 0.2s',
+                fontVariantNumeric: 'tabular-nums'
               }}>
-                {potentialPoints}
+                {formatPoints(potentialPoints)}
               </div>
               <div style={{ fontSize: '9px', color: '#555', textTransform: 'uppercase', letterSpacing: '0.1em', marginTop: '2px' }}>
                 Points
@@ -480,29 +487,29 @@ export function BettingCard({ player, team, opponent, stat, line, odds, type, al
             </div>
           )}
 
-          {/* Legend */}
+          {/* Legend - Updated for probability-based points */}
           <div style={{ 
             display: 'flex', 
             justifyContent: 'center', 
-            gap: '20px',
+            gap: '16px',
             paddingTop: '12px',
             borderTop: '1px solid #1a1a1a'
           }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
               <div style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: '#00FF00' }}></div>
-              <span style={{ fontSize: '9px', color: '#555', textTransform: 'uppercase', letterSpacing: '0.05em' }}>2-3 pts</span>
+              <span style={{ fontSize: '8px', color: '#555', textTransform: 'uppercase', letterSpacing: '0.03em' }}>1-1.5x</span>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
               <div style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: '#ffffff' }}></div>
-              <span style={{ fontSize: '9px', color: '#555', textTransform: 'uppercase', letterSpacing: '0.05em' }}>4-5 pts</span>
+              <span style={{ fontSize: '8px', color: '#555', textTransform: 'uppercase', letterSpacing: '0.03em' }}>1.5-2x</span>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
               <div style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: '#ff6b35' }}></div>
-              <span style={{ fontSize: '9px', color: '#555', textTransform: 'uppercase', letterSpacing: '0.05em' }}>6-7 pts</span>
+              <span style={{ fontSize: '8px', color: '#555', textTransform: 'uppercase', letterSpacing: '0.03em' }}>2-3x</span>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
               <div style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: '#ef4444' }}></div>
-              <span style={{ fontSize: '9px', color: '#555', textTransform: 'uppercase', letterSpacing: '0.05em' }}>8 pts</span>
+              <span style={{ fontSize: '8px', color: '#555', textTransform: 'uppercase', letterSpacing: '0.03em' }}>3x+</span>
             </div>
           </div>
         </div>
@@ -528,7 +535,7 @@ export function BettingCard({ player, team, opponent, stat, line, odds, type, al
             }}
             className="hover:opacity-90 active:scale-[0.98]"
           >
-            Lock In • {potentialPoints} Points
+            Lock In • {formatPoints(potentialPoints)} pts
           </button>
         </div>
       </div>
