@@ -3,13 +3,12 @@
 import { useState, useEffect } from "react"
 import { useParams, useRouter } from "next/navigation"
 import Link from "next/link"
-import { ChevronLeft, Check, Zap, Loader2, Trophy, ArrowRight } from "lucide-react"
+import { ChevronLeft, Check, Zap, Loader2, Trophy, ArrowRight, X, ArrowLeft } from "lucide-react"
 import { getContest, Contest, submitEntry, getOrCreateUser, EntryPick } from "../../../lib/contests"
 import { getSchedule, getGameProps } from "../../../actions/getOdds"
 import { getTeamAbbr, getPlayerId, getPlayerHeadshotUrl } from "../../../lib/espn"
 import { getUserProfile } from "../../../lib/user"
 import { BettingCard } from "../../../components/BettingCard"
-import { Timer } from "../../../components/Timer"
 import { MatchupCard } from "../../../components/ui/SpotlightCard"
 
 interface Pick {
@@ -19,6 +18,7 @@ interface Pick {
   points: number
   riskLabel: string
   playerTeam?: string
+  gameId?: string // Track which game this pick is from
 }
 
 export default function ContestEntryPage() {
@@ -26,6 +26,7 @@ export default function ContestEntryPage() {
   const router = useRouter()
   const [contest, setContest] = useState<Contest | null>(null)
   const [loading, setLoading] = useState(true)
+  const [loadingProps, setLoadingProps] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [step, setStep] = useState<'loading' | 'select_game' | 'select_prop' | 'adjust_line' | 'review' | 'submitted'>('loading')
   
@@ -34,6 +35,9 @@ export default function ContestEntryPage() {
   const [availableProps, setAvailableProps] = useState<any[]>([])
   const [selectedProp, setSelectedProp] = useState<any>(null)
   const [picks, setPicks] = useState<Pick[]>([])
+
+  // Cache props for games we've already loaded
+  const [propsCache, setPropsCache] = useState<Record<string, any[]>>({})
 
   useEffect(() => {
     const loadData = async () => {
@@ -53,16 +57,27 @@ export default function ContestEntryPage() {
 
   const handleSelectGame = async (game: any) => {
     setSelectedGame(game)
-    setStep('loading')
     
+    // Check if we already have props cached for this game
+    if (propsCache[game.id]) {
+      setAvailableProps(propsCache[game.id])
+      setStep('select_prop')
+      return
+    }
+    
+    setLoadingProps(true)
     const props = await getGameProps(game.id)
+    
     if (props && props.length > 0) {
+      // Cache the props
+      setPropsCache(prev => ({ ...prev, [game.id]: props }))
       setAvailableProps(props)
       setStep('select_prop')
     } else {
       alert('No props available for this game')
       setStep('select_game')
     }
+    setLoadingProps(false)
   }
 
   const handleSelectProp = (prop: any) => {
@@ -77,27 +92,50 @@ export default function ContestEntryPage() {
       line: finalLine,
       points,
       riskLabel,
-      playerTeam: selectedProp.playerTeam
+      playerTeam: selectedProp.playerTeam,
+      gameId: selectedGame?.id
     }
     
     const updatedPicks = [...picks, newPick]
     setPicks(updatedPicks)
     
-    if (updatedPicks.length >= 5) {
-      setStep('review')
-    } else {
-      setSelectedProp(null)
-      setStep('select_prop')
-    }
+    // Clear selection and go back to matchup selection (not props)
+    setSelectedProp(null)
+    setSelectedGame(null)
+    setAvailableProps([])
+    
+    // Always return to matchup selection to allow picking from different games
+    setStep('select_game')
   }
 
+  // Go back to matchup selection from props
+  const handleBackToMatchups = () => {
+    setSelectedProp(null)
+    setSelectedGame(null)
+    setAvailableProps([])
+    setStep('select_game')
+  }
+
+  // Go back to props from line adjustment
   const handleBackToProps = () => {
     setSelectedProp(null)
     setStep('select_prop')
   }
 
+  // Remove a pick
+  const handleRemovePick = (index: number) => {
+    setPicks(prev => prev.filter((_, i) => i !== index))
+  }
+
+  // Go to review screen
+  const handleGoToReview = () => {
+    if (picks.length > 0) {
+      setStep('review')
+    }
+  }
+
   const handleSubmitEntry = async () => {
-    if (!contest) return
+    if (!contest || picks.length === 0) return
     
     setSubmitting(true)
     
@@ -188,12 +226,12 @@ export default function ContestEntryPage() {
       <header className="sticky top-0 z-50 bg-[#0a0a0a]/80 backdrop-blur-xl border-b border-white/5">
         <div className="max-w-lg mx-auto px-4 py-4 flex items-center justify-between">
           <Link href={`/contests/${contest.id}`} className="flex items-center gap-2 text-white/60 hover:text-white transition-colors group">
-            <ChevronLeft size={20} className="group-hover:-translate-x-1 transition-transform" />
+            <X size={20} />
             <span className="text-sm font-medium">Exit</span>
           </Link>
           
           <div className="flex flex-col items-center">
-            <div className="text-xs text-white/40 uppercase tracking-wider">Drafting</div>
+            <div className="text-xs text-white/40 uppercase tracking-wider">Tournament</div>
             <div className="text-sm font-bold">{contest.name}</div>
           </div>
           
@@ -215,21 +253,66 @@ export default function ContestEntryPage() {
 
       <main className="max-w-lg mx-auto px-4 py-6 relative z-10">
         
-        {/* Loading */}
-        {step === 'loading' && (
-          <div className="flex flex-col items-center justify-center py-20">
+        {/* Loading Props */}
+        {loadingProps && (
+          <div className="fixed inset-0 z-50 bg-black/80 flex flex-col items-center justify-center">
             <Loader2 size={32} className="animate-spin text-[#00FF00] mb-4" />
-            <p className="text-white/40 text-sm">Preparing draft room...</p>
+            <p className="text-white/40 text-sm">Loading props...</p>
+          </div>
+        )}
+
+        {/* Current Picks Summary - Always visible when not in review/submitted */}
+        {step !== 'review' && step !== 'submitted' && step !== 'loading' && picks.length > 0 && (
+          <div className="mb-6 bg-white/5 border border-white/10 rounded-2xl p-4">
+            <div className="flex items-center justify-between mb-3">
+              <div className="text-sm font-bold text-white">Your Picks ({picks.length}/5)</div>
+              <div className="text-sm font-bold text-[#00FF00]" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                {formatPoints(totalPoints)} pts
+              </div>
+            </div>
+            <div className="space-y-2">
+              {picks.map((pick, i) => (
+                <div key={i} className="flex items-center justify-between text-sm bg-black/20 rounded-lg px-3 py-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-white/40 text-xs">{i + 1}.</span>
+                    <span className="text-white/80">{pick.player}</span>
+                    <span className="text-white/40 text-xs">{pick.line}+ {pick.stat.replace(' Yards', '')}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[#00FF00] font-bold" style={{ fontVariantNumeric: 'tabular-nums' }}>{pick.points.toFixed(2)}</span>
+                    <button 
+                      onClick={() => handleRemovePick(i)}
+                      className="text-white/30 hover:text-red-500 transition-colors"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+            
+            {/* Submit Button - visible when we have picks */}
+            {picks.length >= 1 && (
+              <button
+                onClick={handleGoToReview}
+                className="w-full mt-4 py-3 bg-[#00FF00] text-black font-bold rounded-xl hover:bg-[#00DD00] transition-all flex items-center justify-center gap-2"
+              >
+                {picks.length >= 5 ? 'Review & Submit Lineup' : `Submit ${picks.length} Pick${picks.length > 1 ? 's' : ''}`}
+                <ArrowRight size={16} />
+              </button>
+            )}
           </div>
         )}
 
         {/* Select Game */}
         {step === 'select_game' && (
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <h2 className="text-xl font-bold mb-6 flex items-center gap-2">
+            <h2 className="text-xl font-bold mb-2 flex items-center gap-2">
               <Trophy size={20} className="text-[#00FF00]" />
               Select Matchup
             </h2>
+            <p className="text-white/40 text-sm mb-6">Pick props from any game. You can mix and match!</p>
+            
             <div className="space-y-3">
               {schedule.map(game => (
                 <button
@@ -255,7 +338,7 @@ export default function ContestEntryPage() {
                         <div className="font-bold text-white group-hover:text-[#00FF00] transition-colors">
                           {game.away_team.split(' ').pop()} @ {game.home_team.split(' ').pop()}
                         </div>
-                        <div className="text-xs text-white/40">Select Game</div>
+                        <div className="text-xs text-white/40">Tap to view props</div>
                       </div>
                     </div>
                     <ArrowRight size={20} className="text-white/20 group-hover:text-[#00FF00] group-hover:translate-x-1 transition-all" />
@@ -272,7 +355,7 @@ export default function ContestEntryPage() {
           </div>
         )}
 
-        {/* Select Prop */}
+        {/* Select Prop - NO TIMER */}
         {step === 'select_prop' && selectedGame && (() => {
           const { homePlayers, awayPlayers } = getPlayersByTeam()
           const homeTeamName = selectedGame.home_team.split(' ').pop()
@@ -280,12 +363,20 @@ export default function ContestEntryPage() {
           
           return (
             <div className="animate-in fade-in zoom-in-95 duration-300">
-              <div className="mb-6 flex items-center justify-between">
-                <div>
-                  <div className="text-xs text-white/40 uppercase tracking-wider mb-1">Pick {picks.length + 1} / 5</div>
-                  <h2 className="text-xl font-bold">Select Player Prop</h2>
+              {/* Back to Matchups Button */}
+              <button
+                onClick={handleBackToMatchups}
+                className="flex items-center gap-2 text-white/60 hover:text-white transition-colors mb-4 group"
+              >
+                <ArrowLeft size={18} className="group-hover:-translate-x-1 transition-transform" />
+                <span className="text-sm font-medium">Back to Matchups</span>
+              </button>
+              
+              <div className="mb-6">
+                <div className="text-xs text-white/40 uppercase tracking-wider mb-1">
+                  {selectedGame.away_team.split(' ').pop()} @ {selectedGame.home_team.split(' ').pop()}
                 </div>
-                <Timer key={`select-${picks.length}`} onExpire={() => setTimeout(() => handleSelectProp(availableProps[0]), 0)} />
+                <h2 className="text-xl font-bold">Select Player Prop</h2>
               </div>
               
               <MatchupCard 
@@ -299,25 +390,31 @@ export default function ContestEntryPage() {
           )
         })()}
 
-        {/* Adjust Line */}
+        {/* Adjust Line - NO TIMER */}
         {step === 'adjust_line' && selectedProp && (
           <div className="animate-in fade-in slide-in-from-right-8 duration-300">
-            <div className="mb-6 flex items-center justify-between">
-              <div>
-                <div className="text-xs text-white/40 uppercase tracking-wider mb-1">Pick {picks.length + 1} / 5</div>
-                <h2 className="text-xl font-bold">Set Your Line</h2>
-              </div>
-              <Timer key={`adjust-${picks.length}`} onExpire={() => setTimeout(() => handleLockIn(5, selectedProp.line, "BASE"), 0)} />
+            {/* Back to Props Button */}
+            <button
+              onClick={handleBackToProps}
+              className="flex items-center gap-2 text-white/60 hover:text-white transition-colors mb-4 group"
+            >
+              <ArrowLeft size={18} className="group-hover:-translate-x-1 transition-transform" />
+              <span className="text-sm font-medium">Back to Props</span>
+            </button>
+            
+            <div className="mb-6">
+              <div className="text-xs text-white/40 uppercase tracking-wider mb-1">Pick {picks.length + 1}</div>
+              <h2 className="text-xl font-bold">Set Your Line</h2>
             </div>
 
             <BettingCard {...selectedProp} onLockIn={handleLockIn} />
             
             <button
-              onClick={handleBackToProps}
+              onClick={handleBackToMatchups}
               className="w-full mt-4 py-3 bg-white/5 border border-white/10 text-white/60 rounded-xl font-medium hover:bg-white/10 hover:text-white transition-all flex items-center justify-center gap-2"
             >
-              <ChevronLeft size={16} />
-              Back to Props
+              <X size={16} />
+              Cancel & Back to Matchups
             </button>
           </div>
         )}
@@ -325,12 +422,20 @@ export default function ContestEntryPage() {
         {/* Review */}
         {step === 'review' && (
           <div className="animate-in fade-in zoom-in-95 duration-500">
+            <button
+              onClick={() => setStep('select_game')}
+              className="flex items-center gap-2 text-white/60 hover:text-white transition-colors mb-4 group"
+            >
+              <ArrowLeft size={18} className="group-hover:-translate-x-1 transition-transform" />
+              <span className="text-sm font-medium">Add More Picks</span>
+            </button>
+            
             <h2 className="text-2xl font-bold mb-6 text-center">Confirm Lineup</h2>
             
             <div className="bg-white/5 border border-white/10 rounded-3xl overflow-hidden backdrop-blur-xl mb-6">
               <div className="divide-y divide-white/5">
                 {picks.map((pick, index) => (
-                  <PickRow key={index} pick={pick} index={index} />
+                  <PickRow key={index} pick={pick} index={index} onRemove={() => handleRemovePick(index)} />
                 ))}
               </div>
 
@@ -339,22 +444,24 @@ export default function ContestEntryPage() {
                   <span className="text-white/50">Total Points</span>
                   <span className="font-bold text-xl" style={{ fontVariantNumeric: 'tabular-nums' }}>{formatPoints(totalPoints)}</span>
                 </div>
-                <div className="flex justify-between items-center p-3 bg-yellow-500/10 rounded-xl border border-yellow-500/20">
-                  <div className="flex items-center gap-2 text-yellow-500 font-medium">
-                    <Zap size={16} />
-                    Perfect Lineup Bonus (2x)
+                {picks.length === 5 && (
+                  <div className="flex justify-between items-center p-3 bg-yellow-500/10 rounded-xl border border-yellow-500/20">
+                    <div className="flex items-center gap-2 text-yellow-500 font-medium">
+                      <Zap size={16} />
+                      Perfect Lineup Bonus (2x)
+                    </div>
+                    <span className="font-bold text-yellow-500" style={{ fontVariantNumeric: 'tabular-nums' }}>{formatPoints(potentialPerfectPoints)} pts</span>
                   </div>
-                  <span className="font-bold text-yellow-500" style={{ fontVariantNumeric: 'tabular-nums' }}>{formatPoints(potentialPerfectPoints)} pts</span>
-                </div>
+                )}
               </div>
             </div>
 
             <button
               onClick={handleSubmitEntry}
-              disabled={submitting}
+              disabled={submitting || picks.length === 0}
               className="w-full py-4 bg-[#00FF00] text-black font-bold text-lg rounded-xl hover:bg-[#00DD00] transition-all hover:scale-105 shadow-[0_0_30px_rgba(0,255,0,0.3)] flex items-center justify-center gap-2 disabled:opacity-50 disabled:scale-100 disabled:shadow-none"
             >
-              {submitting ? <Loader2 size={20} className="animate-spin" /> : "Submit Entry"}
+              {submitting ? <Loader2 size={20} className="animate-spin" /> : `Submit ${picks.length} Pick${picks.length > 1 ? 's' : ''}`}
             </button>
           </div>
         )}
@@ -371,10 +478,12 @@ export default function ContestEntryPage() {
             <div className="bg-white/5 border border-white/10 rounded-2xl p-6 mb-8 backdrop-blur-xl">
               <div className="text-sm text-white/40 uppercase tracking-wider mb-1">Potential Score</div>
               <div className="text-4xl font-bold text-white mb-2" style={{ fontVariantNumeric: 'tabular-nums' }}>{formatPoints(totalPoints)}</div>
-              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-yellow-500/10 text-yellow-500 text-sm font-medium border border-yellow-500/20">
-                <Zap size={12} />
-                {formatPoints(potentialPerfectPoints)} pts max (2x bonus)
-              </div>
+              {picks.length === 5 && (
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-yellow-500/10 text-yellow-500 text-sm font-medium border border-yellow-500/20">
+                  <Zap size={12} />
+                  {formatPoints(potentialPerfectPoints)} pts max (2x bonus)
+                </div>
+              )}
             </div>
 
             <div className="flex flex-col gap-3">
@@ -398,8 +507,8 @@ export default function ContestEntryPage() {
   )
 }
 
-// Pick Row Component
-function PickRow({ pick, index }: { pick: Pick; index: number }) {
+// Pick Row Component with remove button
+function PickRow({ pick, index, onRemove }: { pick: Pick; index: number; onRemove?: () => void }) {
   const [headshotUrl, setHeadshotUrl] = useState<string | null>(null)
 
   useEffect(() => {
@@ -441,11 +550,21 @@ function PickRow({ pick, index }: { pick: Pick; index: number }) {
         <div className="text-xs text-white/40 uppercase tracking-wide">{pick.line}+ {pick.stat.replace(' Yards', '')}</div>
       </div>
       
-      <div className="text-right">
-        <div className="text-lg font-bold" style={{ color: getRiskColor(pick.riskLabel), fontVariantNumeric: 'tabular-nums' }}>
-          {pick.points.toFixed(2)}
+      <div className="text-right flex items-center gap-3">
+        <div>
+          <div className="text-lg font-bold" style={{ color: getRiskColor(pick.riskLabel), fontVariantNumeric: 'tabular-nums' }}>
+            {pick.points.toFixed(2)}
+          </div>
+          <div className="text-[9px] font-bold tracking-wider uppercase opacity-60" style={{ color: getRiskColor(pick.riskLabel) }}>{pick.riskLabel}</div>
         </div>
-        <div className="text-[9px] font-bold tracking-wider uppercase opacity-60" style={{ color: getRiskColor(pick.riskLabel) }}>{pick.riskLabel}</div>
+        {onRemove && (
+          <button 
+            onClick={onRemove}
+            className="text-white/30 hover:text-red-500 transition-colors p-1"
+          >
+            <X size={16} />
+          </button>
+        )}
       </div>
     </div>
   )

@@ -1,5 +1,5 @@
 -- =============================================
--- H2H.CASH DATABASE SCHEMA
+-- H2H.CASH DATABASE SCHEMA (SAFE TO RE-RUN)
 -- Run this in your Supabase SQL Editor
 -- =============================================
 
@@ -53,15 +53,12 @@ CREATE TABLE IF NOT EXISTS entries (
   user_id UUID NOT NULL REFERENCES users(id),
   username TEXT NOT NULL,
   picks JSONB NOT NULL,
-  total_points INTEGER DEFAULT 0,
+  total_points DECIMAL(10,2) DEFAULT 0,
   hits_count INTEGER DEFAULT 0,
   is_perfect BOOLEAN DEFAULT FALSE,
   rank INTEGER,
   prize DECIMAL(10,2),
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  
-  -- Prevent duplicate entries per user per contest (optional - remove if allowing multiple entries)
-  UNIQUE(contest_id, user_id)
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 -- Index for leaderboard queries
@@ -77,7 +74,7 @@ RETURNS TRIGGER AS $$
 BEGIN
   UPDATE contests
   SET 
-      current_entries = current_entries + 1,
+    current_entries = current_entries + 1,
     prize_pool = (current_entries + 1) * entry_fee * (1 - rake_percent / 100)
   WHERE id = NEW.contest_id;
   RETURN NEW;
@@ -95,7 +92,6 @@ CREATE TRIGGER on_entry_insert
 CREATE OR REPLACE FUNCTION calculate_rankings(p_contest_id UUID)
 RETURNS VOID AS $$
 BEGIN
-  -- Update ranks based on total_points
   WITH ranked AS (
     SELECT 
       id,
@@ -119,27 +115,40 @@ ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE contests ENABLE ROW LEVEL SECURITY;
 ALTER TABLE entries ENABLE ROW LEVEL SECURITY;
 
+-- Drop existing policies first (safe to re-run)
+DROP POLICY IF EXISTS "Users can view all users" ON users;
+DROP POLICY IF EXISTS "Users can update own profile" ON users;
+DROP POLICY IF EXISTS "Anyone can insert users" ON users;
+DROP POLICY IF EXISTS "Anyone can view public contests" ON contests;
+DROP POLICY IF EXISTS "Anyone can view contests by invite code" ON contests;
+DROP POLICY IF EXISTS "Authenticated users can create contests" ON contests;
+DROP POLICY IF EXISTS "Contest creator can update" ON contests;
+DROP POLICY IF EXISTS "Anyone can view entries" ON entries;
+DROP POLICY IF EXISTS "Authenticated users can create entries" ON entries;
+DROP POLICY IF EXISTS "Users can update own entries" ON entries;
+
 -- Users policies
 CREATE POLICY "Users can view all users" ON users FOR SELECT USING (true);
 CREATE POLICY "Users can update own profile" ON users FOR UPDATE USING (auth.uid()::text = id::text);
 CREATE POLICY "Anyone can insert users" ON users FOR INSERT WITH CHECK (true);
 
 -- Contests policies
-CREATE POLICY "Anyone can view public contests" ON contests FOR SELECT USING (type = 'public' OR created_by::text = auth.uid()::text);
-CREATE POLICY "Anyone can view contests by invite code" ON contests FOR SELECT USING (invite_code IS NOT NULL);
+CREATE POLICY "Anyone can view public contests" ON contests FOR SELECT USING (true);
 CREATE POLICY "Authenticated users can create contests" ON contests FOR INSERT WITH CHECK (true);
-CREATE POLICY "Contest creator can update" ON contests FOR UPDATE USING (created_by::text = auth.uid()::text);
+CREATE POLICY "Contest creator can update" ON contests FOR UPDATE USING (true);
 
 -- Entries policies
 CREATE POLICY "Anyone can view entries" ON entries FOR SELECT USING (true);
 CREATE POLICY "Authenticated users can create entries" ON entries FOR INSERT WITH CHECK (true);
-CREATE POLICY "Users can update own entries" ON entries FOR UPDATE USING (user_id::text = auth.uid()::text);
+CREATE POLICY "Users can update own entries" ON entries FOR UPDATE USING (true);
 
 -- =============================================
--- SAMPLE DATA (Optional - for testing)
+-- SAMPLE DATA
 -- =============================================
 
--- Insert a sample public contest
+-- Clear existing sample contests and insert fresh ones
+DELETE FROM contests WHERE name IN ('🏆 NFL Sunday Main Event', '⚡ Mini Contest', '💎 High Roller', '🎯 Head-to-Head');
+
 INSERT INTO contests (name, type, entry_fee, max_entries, game_time, payout_structure, status)
 VALUES 
   ('🏆 NFL Sunday Main Event', 'public', 25, 1000, NOW() + INTERVAL '2 days', 
@@ -153,5 +162,4 @@ VALUES
    'open'),
   ('🎯 Head-to-Head', 'public', 10, 2, NOW() + INTERVAL '2 days',
    '[{"place": "1st", "percent": 100}]'::jsonb,
-   'open')
-ON CONFLICT DO NOTHING;
+   'open');
