@@ -21,13 +21,8 @@ export function UserHeader() {
     router.refresh()
   }
 
-  if (loading) {
-    return (
-      <div className="flex items-center gap-2 px-3 py-2 bg-white/5 rounded-full">
-        <Loader2 size={16} className="animate-spin text-white/40" />
-      </div>
-    )
-  }
+  // Don't show loading spinner - just show Sign In button while checking auth
+  // This prevents the page from appearing stuck
 
   if (!user) {
     return (

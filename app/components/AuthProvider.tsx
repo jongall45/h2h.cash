@@ -1,7 +1,8 @@
 "use client"
 
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react'
-import { User, getCurrentUser, onAuthStateChange } from '../lib/auth'
+import { User, getCurrentUser } from '../lib/auth'
+import { supabase } from '../lib/supabase'
 
 interface AuthContextType {
   user: User | null
@@ -11,7 +12,7 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
-  loading: true,
+  loading: false, // Default to false to prevent infinite loading
   refreshUser: async () => {}
 })
 
@@ -20,23 +21,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
 
   const refreshUser = async () => {
-    const { user: currentUser } = await getCurrentUser()
-    setUser(currentUser)
+    try {
+      const { user: currentUser } = await getCurrentUser()
+      setUser(currentUser)
+    } catch (err) {
+      console.error('Error refreshing user:', err)
+      setUser(null)
+    }
   }
 
   useEffect(() => {
     // Initial load
     const initAuth = async () => {
-      setLoading(true)
-      await refreshUser()
-      setLoading(false)
+      try {
+        await refreshUser()
+      } catch (err) {
+        console.error('Auth init error:', err)
+      } finally {
+        setLoading(false)
+      }
     }
     
     initAuth()
 
     // Listen for auth state changes
-    const { data: { subscription } } = onAuthStateChange((user) => {
-      setUser(user)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (session?.user) {
+        await refreshUser()
+      } else {
+        setUser(null)
+      }
       setLoading(false)
     })
 
@@ -55,4 +69,3 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 export function useAuth() {
   return useContext(AuthContext)
 }
-
