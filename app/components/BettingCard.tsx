@@ -116,14 +116,40 @@ export function BettingCard({ player, team, opponent, stat, line, odds, type, al
     }
   }
 
-  // Get gradient for slider track based on position
+  // Get the BASE line position (where odds are around -110)
+  const getBaseLinePercentage = () => {
+    if (alternateLines.length === 0) return 50
+    const baseIndex = alternateLines.findIndex(l => 
+      l.odds >= -120 && l.odds <= -100
+    )
+    const index = baseIndex >= 0 ? baseIndex : Math.floor(alternateLines.length / 2)
+    return (index / (alternateLines.length - 1)) * 100
+  }
+
+  // Get gradient for slider track centered on BASE line
   const getSliderGradient = () => {
+    const basePos = getBaseLinePercentage()
+    
+    // Calculate positions for the gradient with a wider white zone
+    // Green zone: 0% to before basePos
+    // White zone: centered around basePos (wider)
+    // Orange zone: after white zone
+    // Red zone: rest to 100%
+    
+    const whiteWidth = 15 // Width of white zone in percentage points
+    const greenEnd = Math.max(0, basePos - whiteWidth)
+    const whiteStart = basePos - (whiteWidth / 2)
+    const whiteEnd = basePos + (whiteWidth / 2)
+    const orangeStart = basePos + whiteWidth
+    const redStart = basePos + whiteWidth + ((100 - basePos - whiteWidth) * 0.5)
+    
     return `linear-gradient(to right, 
       #00FF00 0%, 
-      #00FF00 25%, 
-      #ffffff 40%, 
-      #ffffff 60%, 
-      #ff6b35 75%, 
+      #00FF00 ${greenEnd}%, 
+      #ffffff ${whiteStart}%, 
+      #ffffff ${whiteEnd}%, 
+      #ff6b35 ${orangeStart}%, 
+      #ef4444 ${redStart}%, 
       #ef4444 100%
     )`
   }
@@ -350,7 +376,7 @@ export function BettingCard({ player, team, opponent, stat, line, odds, type, al
                   userSelect: 'none'
                 }}
               >
-                {/* Background Track */}
+                {/* Background Track - Single continuous gradient */}
                 <div style={{
                   position: 'absolute',
                   top: '50%',
@@ -360,20 +386,7 @@ export function BettingCard({ player, team, opponent, stat, line, odds, type, al
                   transform: 'translateY(-50%)',
                   background: getSliderGradient(),
                   borderRadius: '4px',
-                  opacity: 0.3
-                }}></div>
-
-                {/* Active Track (filled portion) */}
-                <div style={{
-                  position: 'absolute',
-                  top: '50%',
-                  left: 0,
-                  width: `${sliderValue}%`,
-                  height: '8px',
-                  transform: 'translateY(-50%)',
-                  background: getSliderGradient(),
-                  borderRadius: '4px',
-                  transition: isDragging ? 'none' : 'width 0.1s'
+                  opacity: 1
                 }}></div>
 
                 {/* Slider Handle */}
