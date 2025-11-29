@@ -113,9 +113,12 @@ export default function ContestDetailPage() {
   }
 
   // Check if contest is live or completed (games have started)
+  // Use STATUS not time - status is updated when games actually start
   const isLive = contest.status === 'live'
   const isCompleted = contest.status === 'completed'
-  const gamesStarted = new Date(contest.gameTime) <= new Date()
+  // Games have started only when status is 'live' or 'completed'
+  // Don't use time comparison because DB might have stale dates
+  const gamesStarted = isLive || isCompleted
 
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-white relative overflow-hidden" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
@@ -223,6 +226,17 @@ export default function ContestDetailPage() {
           </div>
         </div>
 
+        {/* Pre-Game Notice - Show when contest is open but games haven't started */}
+        {!gamesStarted && contest.status === 'open' && (
+          <div className="mb-8 p-4 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex items-center gap-4">
+            <div className="w-3 h-3 rounded-full bg-blue-500"></div>
+            <div>
+              <div className="font-bold text-blue-400">Waiting for Kickoff</div>
+              <div className="text-sm text-white/50">Scoring begins when games start. Other players' picks are hidden until then.</div>
+            </div>
+          </div>
+        )}
+
         {/* Live Scoring Notice */}
         {gamesStarted && !isCompleted && (
           <div className="mb-8 p-4 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center gap-4">
@@ -304,11 +318,16 @@ export default function ContestDetailPage() {
                         } ${isOwnEntry ? 'border-l-2 border-[#00FF00]' : ''}`}
                       >
                         <div className="col-span-1 font-medium text-white/50">
-                          {isTop3 ? (
-                            rank === 1 ? <Crown size={16} className="text-yellow-500 fill-yellow-500" /> :
-                            rank === 2 ? <Medal size={16} className="text-gray-300" /> :
-                            <Medal size={16} className="text-amber-600" />
-                          ) : rank}
+                          {/* Only show ranks/trophies once games have started */}
+                          {gamesStarted ? (
+                            isTop3 ? (
+                              rank === 1 ? <Crown size={16} className="text-yellow-500 fill-yellow-500" /> :
+                              rank === 2 ? <Medal size={16} className="text-gray-300" /> :
+                              <Medal size={16} className="text-amber-600" />
+                            ) : rank
+                          ) : (
+                            <span className="text-white/30">—</span>
+                          )}
                         </div>
                         
                         <div className="col-span-6 md:col-span-7 flex items-center gap-3">
@@ -317,7 +336,8 @@ export default function ContestDetailPage() {
                           </div>
                           <div className="flex flex-col">
                             <span className="text-sm font-medium text-white/90">{entry.username}</span>
-                            {isInMoney && displayPoints > 0 && (
+                            {/* Only show "Winning" once games have started and scoring is live */}
+                            {gamesStarted && isInMoney && displayPoints > 0 && (
                               <span className="text-[10px] text-[#00FF00] font-medium md:hidden">Winning ${prize}</span>
                             )}
                           </div>
@@ -357,7 +377,8 @@ export default function ContestDetailPage() {
                               {isOwnEntry ? `${entry.totalPoints.toFixed(2)} potential` : '— hidden'}
                             </div>
                           )}
-                          {isInMoney && displayPoints > 0 && (
+                          {/* Only show "Winning" once games have started and scoring is live */}
+                          {gamesStarted && isInMoney && displayPoints > 0 && (
                             <div className="text-xs text-[#00FF00] font-medium hidden md:block">
                               Winning ${prize}
                             </div>
