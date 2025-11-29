@@ -4,10 +4,10 @@ import { useState, useEffect } from "react"
 import { useParams, useRouter } from "next/navigation"
 import Link from "next/link"
 import { ChevronLeft, Check, Zap, Loader2, Trophy, ArrowRight, X, ArrowLeft } from "lucide-react"
-import { getContest, Contest, submitEntry, getOrCreateUser, EntryPick } from "../../../lib/contests"
+import { getContest, Contest, submitEntry, EntryPick } from "../../../lib/contests"
 import { getSchedule, getGameProps } from "../../../actions/getOdds"
 import { getTeamAbbr, getPlayerId, getPlayerHeadshotUrl } from "../../../lib/espn"
-import { getUserProfile } from "../../../lib/user"
+import { getCurrentUser } from "../../../lib/auth"
 import { BettingCard } from "../../../components/BettingCard"
 import { MatchupCard } from "../../../components/ui/SpotlightCard"
 
@@ -150,13 +150,13 @@ export default function ContestEntryPage() {
     
     setSubmitting(true)
     
-    const localUser = getUserProfile()
-    const username = localUser?.username || 'Guest_' + Math.random().toString(36).substring(7)
+    // Get the authenticated Supabase user
+    const { user: authUser, error: authError } = await getCurrentUser()
     
-    const user = await getOrCreateUser(username, localUser?.email)
-    
-    if (!user) {
-      alert('Error creating user. Please try again.')
+    if (authError || !authUser) {
+      // User not logged in - redirect to auth page
+      alert('Please sign in to submit an entry.')
+      router.push('/auth')
       setSubmitting(false)
       return
     }
@@ -169,8 +169,8 @@ export default function ContestEntryPage() {
     }))
     
     const entry = await submitEntry(contest.id, {
-      userId: user.id,
-      username: user.username,
+      userId: authUser.id,
+      username: authUser.username,
       picks: entryPicks
     })
     

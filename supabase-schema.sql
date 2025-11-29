@@ -47,10 +47,13 @@ CREATE INDEX IF NOT EXISTS idx_contests_type_status ON contests(type, status);
 -- =============================================
 -- ENTRIES TABLE
 -- =============================================
-CREATE TABLE IF NOT EXISTS entries (
+-- Drop and recreate entries table to remove foreign key constraint
+DROP TABLE IF EXISTS entries CASCADE;
+
+CREATE TABLE entries (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   contest_id UUID NOT NULL REFERENCES contests(id) ON DELETE CASCADE,
-  user_id UUID NOT NULL REFERENCES users(id),
+  user_id UUID NOT NULL, -- References auth.users, not our users table
   username TEXT NOT NULL,
   picks JSONB NOT NULL,
   total_points DECIMAL(10,2) DEFAULT 0,

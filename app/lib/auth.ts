@@ -192,32 +192,58 @@ export async function signOut(): Promise<void> {
 }
 
 // Get current session
-export async function getCurrentUser(): Promise<User | null> {
+export async function getCurrentUser(): Promise<{ user: User | null; error: string | null }> {
   try {
     const { data: { session } } = await supabase.auth.getSession()
     
     if (!session?.user) {
-      return null
+      return { user: null, error: null }
     }
 
-    const { data: profile } = await supabase
+    // Try to get user profile from our users table
+    let { data: profile, error: profileError } = await supabase
       .from('users')
       .select('*')
       .eq('id', session.user.id)
       .single()
 
+    // If profile doesn't exist, create it
+    if (profileError && profileError.code === 'PGRST116') {
+      const username = session.user.email?.split('@')[0] || session.user.phone?.slice(-4) || 'User'
+      const { data: newProfile, error: insertError } = await supabase
+        .from('users')
+        .insert({
+          id: session.user.id,
+          email: session.user.email,
+          phone: session.user.phone,
+          username,
+          balance: 0
+        })
+        .select()
+        .single()
+      
+      if (insertError) {
+        console.error('Error creating user profile:', insertError)
+      } else {
+        profile = newProfile
+      }
+    }
+
     return {
-      id: session.user.id,
-      email: session.user.email,
-      phone: session.user.phone,
-      username: profile?.username || session.user.email?.split('@')[0] || 'User',
-      avatarUrl: profile?.avatar_url,
-      balance: profile?.balance || 0,
-      createdAt: profile?.created_at || session.user.created_at
+      user: {
+        id: session.user.id,
+        email: session.user.email,
+        phone: session.user.phone,
+        username: profile?.username || session.user.email?.split('@')[0] || 'User',
+        avatarUrl: profile?.avatar_url,
+        balance: profile?.balance || 0,
+        createdAt: profile?.created_at || session.user.created_at
+      },
+      error: null
     }
   } catch (err) {
     console.error('Get current user error:', err)
-    return null
+    return { user: null, error: 'An unexpected error occurred' }
   }
 }
 
@@ -278,7 +304,7 @@ export async function getUserEntryHistory(userId: string): Promise<any[]> {
 export function onAuthStateChange(callback: (user: User | null) => void) {
   return supabase.auth.onAuthStateChange(async (event, session) => {
     if (session?.user) {
-      const user = await getCurrentUser()
+      const { user } = await getCurrentUser()
       callback(user)
     } else {
       callback(null)

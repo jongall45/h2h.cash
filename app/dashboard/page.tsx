@@ -41,25 +41,26 @@ export default function DashboardPage() {
     setLoading(true)
     
     // Try to get user from Supabase auth
-    let currentUser = await getCurrentUser()
+    const { user: currentUser, error } = await getCurrentUser()
     
-    // Fallback to local storage
-    if (!currentUser && typeof window !== 'undefined') {
+    // Fallback to local storage if not authenticated
+    let finalUser = currentUser
+    if (!finalUser && typeof window !== 'undefined') {
       const stored = localStorage.getItem('h2h_user')
       if (stored) {
-        currentUser = JSON.parse(stored)
+        finalUser = JSON.parse(stored)
       }
     }
 
-    if (!currentUser) {
+    if (!finalUser) {
       router.push('/auth')
       return
     }
 
-    setUser(currentUser)
+    setUser(finalUser)
 
     // Load entry history
-    const history = await getUserEntryHistory(currentUser.id)
+    const history = await getUserEntryHistory(finalUser.id)
     setEntries(history as EntryWithContest[])
     
     setLoading(false)
