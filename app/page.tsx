@@ -401,12 +401,12 @@ export default function Home() {
           {/* Header */}
           <header style={{ position: 'fixed', top: 0, right: 0, left: 'auto', zIndex: 50, padding: '16px 24px' }}>
             <Link 
-              href="/login"
+              href="/auth"
               className="psl-glass-btn"
               style={{ textDecoration: 'none' }}
             >
               <span className="dot"></span>
-              <span className="btn-text">Sign Up</span>
+              <span className="btn-text">Sign In</span>
               <span className="arrow">→</span>
             </Link>
           </header>
