@@ -90,66 +90,60 @@ export async function signUpWithEmail(email: string, password: string, username:
   }
 }
 
-// Sign in with email
+// Sign in with email - direct fetch, no SDK
 export async function signInWithEmail(email: string, password: string): Promise<{ user: User | null; error: string | null }> {
   try {
-    console.log('Attempting sign in for:', email)
-    console.log('Supabase URL:', process.env.NEXT_PUBLIC_SUPABASE_URL ? 'Set' : 'NOT SET')
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
     
-    // Check if Supabase is configured
-    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
-      console.error('Supabase not configured!')
-      return { user: null, error: 'Authentication service not configured. Please contact support.' }
+    if (!supabaseUrl || !supabaseKey) {
+      return { user: null, error: 'Auth not configured' }
     }
-    
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password
+
+    // Direct API call - completely bypasses Supabase SDK
+    const response = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=password`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': supabaseKey,
+      },
+      body: JSON.stringify({ email, password })
     })
 
-    if (error) {
-      console.error('Supabase auth error:', error)
-      return { user: null, error: error.message }
+    const data = await response.json()
+
+    if (!response.ok) {
+      return { user: null, error: data.error_description || data.msg || 'Invalid email or password' }
     }
 
-    if (!data.user) {
-      return { user: null, error: 'Failed to sign in' }
+    if (!data.user || !data.access_token) {
+      return { user: null, error: 'Sign in failed' }
     }
 
-    console.log('Auth successful, user id:', data.user.id)
-
-    // Try to get user profile, but don't fail if it doesn't exist
-    let profile = null
-    try {
-      const { data: profileData, error: profileError } = await supabase
-        .from('users')
-        .select('*')
-        .eq('id', data.user.id)
-        .single()
-      
-      if (!profileError) {
-        profile = profileData
-      } else {
-        console.log('No profile found, will use defaults')
-      }
-    } catch (profileErr) {
-      console.log('Profile fetch error (non-fatal):', profileErr)
+    // Store session in localStorage manually (bypass SDK)
+    const session = {
+      access_token: data.access_token,
+      refresh_token: data.refresh_token,
+      expires_at: Math.floor(Date.now() / 1000) + data.expires_in,
+      user: data.user
     }
+    
+    // Store for Supabase SDK to pick up
+    const storageKey = `sb-${new URL(supabaseUrl).hostname.split('.')[0]}-auth-token`
+    localStorage.setItem(storageKey, JSON.stringify(session))
 
     const user: User = {
       id: data.user.id,
       email: data.user.email,
-      username: profile?.username || data.user.email?.split('@')[0] || 'User',
-      avatarUrl: profile?.avatar_url,
-      balance: profile?.balance || 0,
-      createdAt: profile?.created_at || data.user.created_at
+      username: data.user.email?.split('@')[0] || 'User',
+      balance: 0,
+      createdAt: data.user.created_at
     }
 
-    console.log('Returning user:', user.username)
     return { user, error: null }
   } catch (err) {
     console.error('Sign in error:', err)
-    return { user: null, error: 'An unexpected error occurred. Please try again.' }
+    return { user: null, error: 'Connection error. Please try again.' }
   }
 }
 
