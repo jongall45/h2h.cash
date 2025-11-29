@@ -5,9 +5,6 @@ import Link from "next/link"
 import { Trophy, Users, Clock, ChevronRight, Plus, Lock, Globe, Loader2, Zap } from "lucide-react"
 import { getContests, Contest, getContestByCode } from "../lib/contests"
 
-// Prevent static generation - this page needs runtime data
-export const dynamic = 'force-dynamic'
-
 export default function ContestsPage() {
   const [contests, setContests] = useState<Contest[]>([])
   const [loading, setLoading] = useState(true)
