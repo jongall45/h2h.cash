@@ -1,29 +1,48 @@
 "use client"
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { User, LogOut, Settings, Trophy, ChevronDown, Loader2 } from 'lucide-react'
-import { useAuth } from './AuthProvider'
-import { signOut } from '../lib/auth'
+import { User as UserIcon, LogOut, Trophy, ChevronDown, Loader2 } from 'lucide-react'
+import { getCurrentUser, signOut, User } from '../lib/auth'
 
 export function UserHeader() {
-  const { user, loading } = useAuth()
+  const [user, setUser] = useState<User | null>(null)
+  const [loading, setLoading] = useState(true)
   const [showDropdown, setShowDropdown] = useState(false)
   const [signingOut, setSigningOut] = useState(false)
   const router = useRouter()
 
+  useEffect(() => {
+    // Check for user on mount
+    const checkUser = async () => {
+      try {
+        const { user } = await getCurrentUser()
+        setUser(user)
+      } catch (err) {
+        console.error('Error checking user:', err)
+      } finally {
+        setLoading(false)
+      }
+    }
+    
+    checkUser()
+  }, [])
+
   const handleSignOut = async () => {
     setSigningOut(true)
     await signOut()
+    setUser(null)
     setShowDropdown(false)
-    router.push('/')
     router.refresh()
   }
 
-  // Don't show loading spinner - just show Sign In button while checking auth
-  // This prevents the page from appearing stuck
+  // While loading, show nothing (prevents flash)
+  if (loading) {
+    return null
+  }
 
+  // Not logged in - show sign in button
   if (!user) {
     return (
       <Link 
@@ -41,6 +60,7 @@ export function UserHeader() {
     )
   }
 
+  // Logged in - show user menu
   return (
     <div className="relative">
       <button
@@ -78,7 +98,7 @@ export function UserHeader() {
             {/* User info header */}
             <div className="px-4 py-3 border-b border-white/5">
               <div className="font-medium text-white">{user.username}</div>
-              <div className="text-xs text-white/40 truncate">{user.email || user.phone}</div>
+              <div className="text-xs text-white/40 truncate">{user.email}</div>
             </div>
             
             {/* Menu items */}
@@ -88,7 +108,7 @@ export function UserHeader() {
                 onClick={() => setShowDropdown(false)}
                 className="flex items-center gap-3 px-4 py-2.5 text-sm text-white/70 hover:text-white hover:bg-white/5 transition-colors"
               >
-                <User size={16} />
+                <UserIcon size={16} />
                 Dashboard
               </Link>
               
@@ -122,4 +142,3 @@ export function UserHeader() {
     </div>
   )
 }
-
