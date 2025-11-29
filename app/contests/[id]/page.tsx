@@ -3,8 +3,10 @@
 import { useState, useEffect } from "react"
 import { useParams, useRouter } from "next/navigation"
 import Link from "next/link"
-import { Trophy, Users, Clock, ChevronLeft, Share2, Copy, Check, Zap, Target, Loader2, Crown, Medal } from "lucide-react"
-import { getContest, Contest, ContestEntry, calculatePayouts, subscribeToContest } from "../../lib/contests"
+import { Trophy, Users, Clock, ChevronLeft, Share2, Copy, Check, Zap, Target, Loader2, Crown, Medal, X, TrendingUp, TrendingDown } from "lucide-react"
+import { getContest, Contest, ContestEntry, calculatePayouts, subscribeToContest, EntryPick } from "../../lib/contests"
+import { LivePickTracker } from "../../components/LivePickTracker"
+import { TrackedPick } from "../../lib/resolution"
 
 export default function ContestDetailPage() {
   const params = useParams()
@@ -13,6 +15,7 @@ export default function ContestDetailPage() {
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<'leaderboard' | 'prizes' | 'entries'>('leaderboard')
   const [copied, setCopied] = useState(false)
+  const [selectedEntry, setSelectedEntry] = useState<ContestEntry | null>(null)
 
   useEffect(() => {
     const loadContest = async () => {
@@ -83,6 +86,24 @@ export default function ContestDetailPage() {
     router.push(`/contests/${contest.id}/enter`)
   }
 
+  // Convert entry picks to TrackedPick format for live tracking
+  const convertToTrackedPicks = (entry: ContestEntry): TrackedPick[] => {
+    return entry.picks.map((pick, index) => ({
+      id: `${entry.id}-pick-${index}`,
+      playerName: pick.player,
+      stat: pick.stat,
+      line: pick.line,
+      potentialPoints: pick.points,
+      gameId: '', // We'll need to look this up or store it
+      teamAbbr: ''
+    }))
+  }
+
+  // Check if contest is live or completed (games have started)
+  const isLive = contest.status === 'live'
+  const isCompleted = contest.status === 'completed'
+  const gamesStarted = new Date(contest.gameTime) <= new Date()
+
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-white relative overflow-hidden" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
       {/* Background FX */}
@@ -132,8 +153,10 @@ export default function ContestDetailPage() {
                   </span>
                   <span className={`px-2.5 py-1 rounded-full text-xs font-bold uppercase tracking-wide ${
                     contest.status === 'open' ? 'bg-[#00FF00]/20 text-[#00FF00]' :
+                    contest.status === 'live' ? 'bg-red-500/20 text-red-500 animate-pulse' :
                     'bg-white/10 text-white/50'
                   }`}>
+                    {contest.status === 'live' && <span className="inline-block w-2 h-2 bg-red-500 rounded-full mr-1 animate-pulse"></span>}
                     {contest.status}
                   </span>
                 </div>
@@ -187,6 +210,17 @@ export default function ContestDetailPage() {
           </div>
         </div>
 
+        {/* Live Scoring Notice */}
+        {gamesStarted && !isCompleted && (
+          <div className="mb-8 p-4 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center gap-4">
+            <div className="w-3 h-3 rounded-full bg-red-500 animate-pulse"></div>
+            <div>
+              <div className="font-bold text-red-400">Games In Progress</div>
+              <div className="text-sm text-white/50">Scores update in real-time. Points are awarded when picks hit.</div>
+            </div>
+          </div>
+        )}
+
         {/* 2x Bonus Banner */}
         <div className="mb-8 p-1 rounded-2xl bg-gradient-to-r from-yellow-500/20 via-orange-500/20 to-yellow-500/20">
           <div className="bg-[#0a0a0a] rounded-xl p-4 flex items-center gap-4 relative overflow-hidden">
@@ -237,10 +271,14 @@ export default function ContestDetailPage() {
                     const isInMoney = rank <= paidPositions
                     const prize = isInMoney ? Math.floor(contest.prizePool / paidPositions) : 0
                     
+                    // For pending games, show 0 points (potential points shown separately)
+                    const displayPoints = gamesStarted ? entry.totalPoints : 0
+                    
                     return (
                       <div 
                         key={entry.id} 
-                        className={`grid grid-cols-12 gap-4 px-6 py-4 items-center transition-colors hover:bg-white/[0.02] ${
+                        onClick={() => setSelectedEntry(entry)}
+                        className={`grid grid-cols-12 gap-4 px-6 py-4 items-center transition-colors cursor-pointer hover:bg-white/[0.05] ${
                           entry.isPerfect ? 'bg-yellow-500/5' : ''
                         }`}
                       >
@@ -258,30 +296,40 @@ export default function ContestDetailPage() {
                           </div>
                           <div className="flex flex-col">
                             <span className="text-sm font-medium text-white/90">{entry.username}</span>
-                            {isInMoney && (
-                              <span className="text-[10px] text-[#00FF00] font-medium md:hidden">${prize}</span>
+                            {isInMoney && displayPoints > 0 && (
+                              <span className="text-[10px] text-[#00FF00] font-medium md:hidden">Winning ${prize}</span>
                             )}
                           </div>
                           {entry.isPerfect && (
                             <span className="px-1.5 py-0.5 bg-yellow-500/20 text-yellow-500 text-[10px] font-bold rounded uppercase tracking-wide border border-yellow-500/20">
-                              2X Bonus
+                              2X
                             </span>
                           )}
                         </div>
 
                         <div className="col-span-2 text-center">
                           <div className={`inline-flex items-center justify-center px-2 py-1 rounded-md text-xs font-bold ${
-                            entry.hitsCount === 5 ? 'bg-[#00FF00]/20 text-[#00FF00]' : 'bg-white/5 text-white/50'
+                            entry.hitsCount === 5 ? 'bg-[#00FF00]/20 text-[#00FF00]' : 
+                            entry.hitsCount > 0 ? 'bg-white/10 text-white/70' :
+                            'bg-white/5 text-white/30'
                           }`}>
-                            {entry.hitsCount}/5
+                            {gamesStarted ? `${entry.hitsCount}/5` : '0/5'}
                           </div>
                         </div>
 
                         <div className="col-span-3 md:col-span-2 text-right">
-                          <div className={`text-lg font-bold ${entry.isPerfect ? 'text-yellow-500' : 'text-white'}`}>
-                            {entry.totalPoints}
+                          <div className={`text-lg font-bold ${
+                            entry.isPerfect ? 'text-yellow-500' : 
+                            displayPoints > 0 ? 'text-white' : 'text-white/30'
+                          }`} style={{ fontVariantNumeric: 'tabular-nums' }}>
+                            {displayPoints.toFixed(2)}
                           </div>
-                          {isInMoney && (
+                          {!gamesStarted && (
+                            <div className="text-[10px] text-white/30">
+                              {entry.totalPoints.toFixed(2)} potential
+                            </div>
+                          )}
+                          {isInMoney && displayPoints > 0 && (
                             <div className="text-xs text-[#00FF00] font-medium hidden md:block">
                               Winning ${prize}
                             </div>
@@ -299,6 +347,13 @@ export default function ContestDetailPage() {
                   </div>
                 )}
               </div>
+              
+              {/* Click hint */}
+              {contest.entries.length > 0 && (
+                <div className="px-6 py-3 border-t border-white/5 text-center">
+                  <span className="text-xs text-white/30">Click on a player to view their picks</span>
+                </div>
+              )}
             </div>
           )}
 
@@ -357,6 +412,142 @@ export default function ContestDetailPage() {
           )}
         </div>
       </main>
+
+      {/* Entry Detail Modal */}
+      {selectedEntry && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
+          onClick={() => setSelectedEntry(null)}
+        >
+          <div 
+            className="w-full max-w-lg bg-[#111] border border-white/10 rounded-3xl overflow-hidden shadow-2xl"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-4 border-b border-white/10">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-white/10 to-transparent border border-white/10 flex items-center justify-center text-sm font-bold text-white/70">
+                  {selectedEntry.username.charAt(0)}
+                </div>
+                <div>
+                  <div className="font-bold text-white">{selectedEntry.username}</div>
+                  <div className="text-xs text-white/40">
+                    {selectedEntry.hitsCount}/5 Hits • {selectedEntry.totalPoints.toFixed(2)} pts
+                    {selectedEntry.isPerfect && <span className="text-yellow-500 ml-1">🔥 2x</span>}
+                  </div>
+                </div>
+              </div>
+              <button 
+                onClick={() => setSelectedEntry(null)}
+                className="p-2 hover:bg-white/10 rounded-full transition-colors"
+              >
+                <X size={20} className="text-white/60" />
+              </button>
+            </div>
+
+            {/* Picks List */}
+            <div className="p-4 max-h-[60vh] overflow-y-auto">
+              <div className="text-xs text-white/40 uppercase tracking-wider mb-3">Lineup</div>
+              <div className="space-y-3">
+                {selectedEntry.picks.map((pick, index) => (
+                  <PickCard key={index} pick={pick} index={index + 1} gamesStarted={gamesStarted} />
+                ))}
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 border-t border-white/10 bg-black/20">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-xs text-white/40">Total Points</div>
+                  <div className="text-2xl font-bold text-white" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                    {gamesStarted ? selectedEntry.totalPoints.toFixed(2) : '0.00'}
+                    {selectedEntry.isPerfect && <span className="text-yellow-500 text-lg ml-1">🔥</span>}
+                  </div>
+                </div>
+                {!gamesStarted && (
+                  <div className="text-right">
+                    <div className="text-xs text-white/40">Potential</div>
+                    <div className="text-lg font-medium text-white/50" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                      {selectedEntry.totalPoints.toFixed(2)} pts
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Individual pick card for the modal
+function PickCard({ pick, index, gamesStarted }: { pick: EntryPick; index: number; gamesStarted: boolean }) {
+  // For now, show pending status since we don't have live data in this context
+  const status = gamesStarted ? (pick.hit === true ? 'hit' : pick.hit === false ? 'miss' : 'pending') : 'pending'
+  
+  const statusConfig = {
+    pending: { color: '#888888', icon: '⏳', text: 'Pending' },
+    hit: { color: '#00FF00', icon: '✅', text: 'HIT' },
+    miss: { color: '#ef4444', icon: '❌', text: 'MISS' }
+  }
+  
+  const config = statusConfig[status as keyof typeof statusConfig]
+  
+  return (
+    <div 
+      className="p-4 rounded-xl border transition-all"
+      style={{
+        backgroundColor: '#0a0a0a',
+        borderColor: status === 'hit' ? 'rgba(0, 255, 0, 0.3)' : 
+                     status === 'miss' ? 'rgba(239, 68, 68, 0.3)' : 
+                     'rgba(255, 255, 255, 0.1)'
+      }}
+    >
+      <div className="flex items-center gap-3">
+        {/* Pick number */}
+        <div 
+          className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold"
+          style={{ 
+            backgroundColor: `${config.color}20`,
+            color: config.color
+          }}
+        >
+          {index}
+        </div>
+
+        {/* Player info */}
+        <div className="flex-1 min-w-0">
+          <div className="font-semibold text-white truncate">{pick.player}</div>
+          <div className="text-xs text-white/40 uppercase tracking-wide">
+            {pick.line}+ {pick.stat.replace(' Yards', '').replace('Passing', 'Pass').replace('Rushing', 'Rush').replace('Receiving', 'Rec')}
+          </div>
+        </div>
+
+        {/* Status & Points */}
+        <div className="text-right flex-shrink-0">
+          <div 
+            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium mb-1"
+            style={{ 
+              backgroundColor: `${config.color}20`,
+              color: config.color
+            }}
+          >
+            <span>{config.icon}</span>
+            <span>{config.text}</span>
+          </div>
+          <div 
+            className="text-sm font-bold"
+            style={{ 
+              color: status === 'hit' ? '#00FF00' : status === 'miss' ? '#ef4444' : '#888',
+              fontVariantNumeric: 'tabular-nums'
+            }}
+          >
+            {status === 'hit' ? `+${pick.points.toFixed(2)}` : status === 'miss' ? '0.00' : `${pick.points.toFixed(2)} pot.`}
+          </div>
+        </div>
+      </div>
     </div>
   )
 }

@@ -1,6 +1,7 @@
-"use server"
+// Pick Resolution Logic - NO "use server" directive for helper functions
+// Server actions are in separate async functions
 
-import { getGameStatus, getPlayerGameStats, getStatValue, calculatePace, LiveGame, PlayerStats } from './liveStats'
+import { LiveGame } from './liveStats'
 
 // Pick status types
 export type PickStatus = 'pending' | 'live_winning' | 'live_losing' | 'hit' | 'miss'
@@ -12,6 +13,7 @@ export interface PickResolution {
   projectedValue: number // Pace-based projection
   percentComplete: number // 0-100, how close to hitting
   gameStatus: LiveGame['status'] | null
+  earnedPoints: number // Points actually earned (0 until hit)
   lastUpdated: string
 }
 
@@ -21,130 +23,26 @@ export interface TrackedPick {
   playerName: string
   stat: string // "Passing Yards", "Rushing Yards", etc.
   line: number
-  points: number
+  potentialPoints: number // Points IF the pick hits
   gameId: string
   teamAbbr?: string
 }
 
-// Resolve a single pick's status
-export async function resolvePick(pick: TrackedPick): Promise<PickResolution> {
-  const now = new Date().toISOString()
-  
-  // Get game status
-  const gameStatus = await getGameStatus(pick.gameId)
-  
-  if (!gameStatus) {
-    return {
-      status: 'pending',
-      currentValue: 0,
-      targetLine: pick.line,
-      projectedValue: 0,
-      percentComplete: 0,
-      gameStatus: null,
-      lastUpdated: now
-    }
-  }
-
-  // Game hasn't started yet
-  if (gameStatus.status.type === 'pre') {
-    return {
-      status: 'pending',
-      currentValue: 0,
-      targetLine: pick.line,
-      projectedValue: 0,
-      percentComplete: 0,
-      gameStatus: gameStatus.status,
-      lastUpdated: now
-    }
-  }
-
-  // Get player stats
-  const playerStats = await getPlayerGameStats(pick.gameId, pick.playerName)
-  
-  if (!playerStats) {
-    // Player not in game yet or no stats
-    return {
-      status: gameStatus.status.type === 'post' ? 'miss' : 'pending',
-      currentValue: 0,
-      targetLine: pick.line,
-      projectedValue: 0,
-      percentComplete: 0,
-      gameStatus: gameStatus.status,
-      lastUpdated: now
-    }
-  }
-
-  // Get the relevant stat value
-  const currentValue = getStatValue(playerStats, pick.stat)
-  const projectedValue = calculatePace(currentValue, gameStatus.status)
-  const percentComplete = Math.min(100, (currentValue / pick.line) * 100)
-
-  // Determine status
-  let status: PickStatus
-
-  if (gameStatus.status.type === 'post') {
-    // Game is final - determine hit or miss
-    status = currentValue >= pick.line ? 'hit' : 'miss'
-  } else {
-    // Game is live - determine if winning or losing
-    // Consider it "winning" if current value exceeds line OR projected to hit
-    if (currentValue >= pick.line) {
-      status = 'live_winning' // Already hit the line!
-    } else if (projectedValue >= pick.line) {
-      status = 'live_winning' // On pace to hit
-    } else {
-      status = 'live_losing' // Behind pace
-    }
-  }
-
-  return {
-    status,
-    currentValue,
-    targetLine: pick.line,
-    projectedValue,
-    percentComplete,
-    gameStatus: gameStatus.status,
-    lastUpdated: now
-  }
-}
-
-// Resolve multiple picks at once
-export async function resolveMultiplePicks(
-  picks: TrackedPick[]
-): Promise<Map<string, PickResolution>> {
-  const results = new Map<string, PickResolution>()
-  
-  // Group picks by gameId to minimize API calls
-  const picksByGame = new Map<string, TrackedPick[]>()
-  picks.forEach(pick => {
-    const existing = picksByGame.get(pick.gameId) || []
-    existing.push(pick)
-    picksByGame.set(pick.gameId, existing)
-  })
-
-  // Resolve each game's picks
-  for (const [gameId, gamePicks] of picksByGame) {
-    for (const pick of gamePicks) {
-      const resolution = await resolvePick(pick)
-      results.set(pick.id, resolution)
-    }
-  }
-
-  return results
-}
-
-// Calculate total points with hit/miss results
+// Calculate total points - ONLY count hits, not potential
 export function calculateFinalPoints(
   picks: TrackedPick[],
   resolutions: Map<string, PickResolution>
-): { totalPoints: number; hits: number; misses: number; pending: number; isPerfect: boolean } {
+): { totalPoints: number; potentialPoints: number; hits: number; misses: number; pending: number; isPerfect: boolean } {
   let totalPoints = 0
+  let potentialPoints = 0
   let hits = 0
   let misses = 0
   let pending = 0
 
   picks.forEach(pick => {
     const resolution = resolutions.get(pick.id)
+    potentialPoints += pick.potentialPoints
+    
     if (!resolution) {
       pending++
       return
@@ -152,12 +50,17 @@ export function calculateFinalPoints(
 
     switch (resolution.status) {
       case 'hit':
-      case 'live_winning':
+        // Only count points when game is FINAL and pick hit
         hits++
-        totalPoints += pick.points
+        totalPoints += pick.potentialPoints
+        break
+      case 'live_winning':
+        // Game still in progress - don't count points yet
+        pending++
         break
       case 'miss':
         misses++
+        // No points for misses
         break
       case 'live_losing':
       case 'pending':
@@ -166,13 +69,13 @@ export function calculateFinalPoints(
     }
   })
 
-  // Perfect lineup bonus (2x) if all 5 hit
+  // Perfect lineup bonus (2x) if all 5 hit AND all games final
   const isPerfect = hits === 5 && misses === 0 && pending === 0
   if (isPerfect) {
     totalPoints *= 2
   }
 
-  return { totalPoints, hits, misses, pending, isPerfect }
+  return { totalPoints, potentialPoints, hits, misses, pending, isPerfect }
 }
 
 // Get display text for pick status
@@ -214,4 +117,3 @@ export function formatGameClock(gameStatus: LiveGame['status'] | null): string {
     return `OT ${clock}`
   }
 }
-

@@ -2,12 +2,13 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { Loader2, TrendingUp, TrendingDown, Check, X, Clock, Zap } from 'lucide-react'
-import { TrackedPick, PickResolution, resolvePick, getStatusDisplay, formatGameClock, calculateFinalPoints } from '../lib/resolution'
+import { TrackedPick, PickResolution, getStatusDisplay, formatGameClock, calculateFinalPoints } from '../lib/resolution'
+import { resolveAllPicks } from '../actions/liveScoring'
 import { getPlayerId, getPlayerHeadshotUrl } from '../lib/espn'
 
 interface LivePickTrackerProps {
   picks: TrackedPick[]
-  onUpdate?: (resolutions: Map<string, PickResolution>) => void
+  onUpdate?: (resolutions: PickResolution[]) => void
   pollInterval?: number // in milliseconds, default 30000 (30 seconds)
   showTotalScore?: boolean
 }
@@ -18,21 +19,14 @@ export function LivePickTracker({
   pollInterval = 30000,
   showTotalScore = true 
 }: LivePickTrackerProps) {
-  const [resolutions, setResolutions] = useState<Map<string, PickResolution>>(new Map())
+  const [resolutions, setResolutions] = useState<PickResolution[]>([])
   const [loading, setLoading] = useState(true)
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null)
 
   // Fetch resolutions for all picks
   const fetchResolutions = useCallback(async () => {
     try {
-      const newResolutions = new Map<string, PickResolution>()
-      
-      // Resolve each pick
-      for (const pick of picks) {
-        const resolution = await resolvePick(pick)
-        newResolutions.set(pick.id, resolution)
-      }
-      
+      const newResolutions = await resolveAllPicks(picks)
       setResolutions(newResolutions)
       setLastUpdate(new Date())
       onUpdate?.(newResolutions)
@@ -45,24 +39,36 @@ export function LivePickTracker({
 
   // Initial fetch
   useEffect(() => {
-    fetchResolutions()
-  }, [fetchResolutions])
+    if (picks.length > 0) {
+      fetchResolutions()
+    } else {
+      setLoading(false)
+    }
+  }, [fetchResolutions, picks.length])
 
   // Poll for updates
   useEffect(() => {
     // Only poll if there are pending/live picks
-    const hasActivePicks = Array.from(resolutions.values()).some(
+    const hasActivePicks = resolutions.some(
       r => r.status === 'pending' || r.status === 'live_winning' || r.status === 'live_losing'
     )
 
-    if (!hasActivePicks) return
+    if (!hasActivePicks || picks.length === 0) return
 
     const interval = setInterval(fetchResolutions, pollInterval)
     return () => clearInterval(interval)
-  }, [resolutions, pollInterval, fetchResolutions])
+  }, [resolutions, pollInterval, fetchResolutions, picks.length])
 
-  // Calculate totals
-  const { totalPoints, hits, misses, pending, isPerfect } = calculateFinalPoints(picks, resolutions)
+  // Calculate totals from resolutions
+  const earnedPoints = resolutions.reduce((sum, r) => sum + r.earnedPoints, 0)
+  const potentialPoints = picks.reduce((sum, p) => sum + p.potentialPoints, 0)
+  const hits = resolutions.filter(r => r.status === 'hit').length
+  const misses = resolutions.filter(r => r.status === 'miss').length
+  const pending = resolutions.filter(r => r.status === 'pending' || r.status === 'live_winning' || r.status === 'live_losing').length
+  const isPerfect = hits === 5 && misses === 0 && pending === 0
+
+  // Apply 2x bonus for perfect
+  const finalPoints = isPerfect ? earnedPoints * 2 : earnedPoints
 
   if (loading) {
     return (
@@ -72,8 +78,16 @@ export function LivePickTracker({
     )
   }
 
+  if (picks.length === 0) {
+    return (
+      <div className="text-center py-8 text-white/40">
+        No picks to track
+      </div>
+    )
+  }
+
   return (
-    <div className="w-full max-w-lg mx-auto">
+    <div className="w-full">
       {/* Header with total score */}
       {showTotalScore && (
         <div className="mb-6 p-4 bg-white/5 rounded-2xl border border-white/10">
@@ -87,11 +101,16 @@ export function LivePickTracker({
           </div>
           
           <div className="flex items-center justify-between">
-            <div className="text-4xl font-bold text-white" style={{ fontVariantNumeric: 'tabular-nums' }}>
-              {totalPoints.toFixed(2)}
-              {isPerfect && (
-                <span className="ml-2 text-yellow-500 text-lg">🔥 2x</span>
-              )}
+            <div>
+              <div className="text-4xl font-bold text-white" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                {finalPoints.toFixed(2)}
+                {isPerfect && (
+                  <span className="ml-2 text-yellow-500 text-lg">🔥 2x</span>
+                )}
+              </div>
+              <div className="text-xs text-white/30 mt-1">
+                Potential: {potentialPoints.toFixed(2)} pts
+              </div>
             </div>
             
             <div className="flex items-center gap-4 text-sm">
@@ -118,7 +137,7 @@ export function LivePickTracker({
           <LivePickCard 
             key={pick.id} 
             pick={pick} 
-            resolution={resolutions.get(pick.id)}
+            resolution={resolutions[index]}
             index={index + 1}
           />
         ))}
@@ -154,10 +173,12 @@ function LivePickCard({
   const percentComplete = resolution?.percentComplete || 0
   const projectedValue = resolution?.projectedValue || 0
   const gameClockText = formatGameClock(resolution?.gameStatus || null)
+  const earnedPoints = resolution?.earnedPoints || 0
 
   // Determine progress bar color
   const getProgressColor = () => {
-    if (status === 'hit' || status === 'live_winning') return '#00FF00'
+    if (status === 'hit') return '#00FF00'
+    if (status === 'live_winning') return '#00FF00'
     if (status === 'miss') return '#ef4444'
     if (status === 'live_losing') return '#ff6b35'
     return '#555555'
@@ -280,15 +301,19 @@ function LivePickCard({
             </div>
           )}
 
-          {/* Points badge */}
+          {/* Points badge - show earned vs potential */}
           <div 
             className="px-2 py-0.5 rounded text-xs font-bold"
             style={{ 
-              backgroundColor: status === 'hit' || status === 'live_winning' ? 'rgba(0, 255, 0, 0.1)' : 'rgba(255, 255, 255, 0.05)',
-              color: status === 'hit' || status === 'live_winning' ? '#00FF00' : '#888'
+              backgroundColor: earnedPoints > 0 ? 'rgba(0, 255, 0, 0.1)' : 'rgba(255, 255, 255, 0.05)',
+              color: earnedPoints > 0 ? '#00FF00' : '#888'
             }}
           >
-            {pick.points.toFixed(2)} pts
+            {earnedPoints > 0 ? (
+              `+${earnedPoints.toFixed(2)} pts`
+            ) : (
+              `${pick.potentialPoints.toFixed(2)} pts potential`
+            )}
           </div>
         </div>
       </div>
@@ -302,14 +327,19 @@ export function LivePickTrackerCompact({
   resolutions
 }: { 
   picks: TrackedPick[]
-  resolutions: Map<string, PickResolution>
+  resolutions: PickResolution[]
 }) {
-  const { totalPoints, hits, misses, pending, isPerfect } = calculateFinalPoints(picks, resolutions)
+  const earnedPoints = resolutions.reduce((sum, r) => sum + r.earnedPoints, 0)
+  const hits = resolutions.filter(r => r.status === 'hit').length
+  const misses = resolutions.filter(r => r.status === 'miss').length
+  const pending = resolutions.filter(r => r.status === 'pending' || r.status === 'live_winning' || r.status === 'live_losing').length
+  const isPerfect = hits === 5 && misses === 0 && pending === 0
+  const finalPoints = isPerfect ? earnedPoints * 2 : earnedPoints
 
   return (
     <div className="flex items-center gap-3">
       <div className="text-lg font-bold text-white" style={{ fontVariantNumeric: 'tabular-nums' }}>
-        {totalPoints.toFixed(2)}
+        {finalPoints.toFixed(2)}
         {isPerfect && <Zap size={14} className="inline ml-1 text-yellow-500" />}
       </div>
       <div className="flex items-center gap-2 text-xs">
@@ -320,4 +350,3 @@ export function LivePickTrackerCompact({
     </div>
   )
 }
-

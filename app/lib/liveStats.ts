@@ -1,6 +1,5 @@
-"use server"
-
 // ESPN API Integration for Live NFL Stats
+// Helper functions - no "use server" directive needed
 
 export interface LiveGame {
   id: string
@@ -53,193 +52,6 @@ export interface GameBoxScore {
   players: PlayerStats[]
 }
 
-// Fetch all live/upcoming NFL games
-export async function getLiveGames(): Promise<LiveGame[]> {
-  try {
-    const res = await fetch(
-      'https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard',
-      { next: { revalidate: 30 } } // Cache for 30 seconds
-    )
-
-    if (!res.ok) {
-      console.error('ESPN scoreboard fetch failed:', res.status)
-      return []
-    }
-
-    const data = await res.json()
-    
-    return (data.events || []).map((event: any) => {
-      const competition = event.competitions?.[0]
-      const homeTeam = competition?.competitors?.find((c: any) => c.homeAway === 'home')
-      const awayTeam = competition?.competitors?.find((c: any) => c.homeAway === 'away')
-      const status = event.status
-
-      return {
-        id: event.id,
-        name: event.name,
-        shortName: event.shortName,
-        status: {
-          type: status?.type?.state === 'pre' ? 'pre' : 
-                status?.type?.state === 'in' ? 'in' : 'post',
-          description: status?.type?.description || 'Unknown',
-          period: status?.period || 0,
-          clock: status?.displayClock || '',
-          completed: status?.type?.completed || false
-        },
-        homeTeam: {
-          id: homeTeam?.team?.id || '',
-          name: homeTeam?.team?.displayName || '',
-          abbreviation: homeTeam?.team?.abbreviation || '',
-          score: parseInt(homeTeam?.score || '0'),
-          logo: homeTeam?.team?.logo || ''
-        },
-        awayTeam: {
-          id: awayTeam?.team?.id || '',
-          name: awayTeam?.team?.displayName || '',
-          abbreviation: awayTeam?.team?.abbreviation || '',
-          score: parseInt(awayTeam?.score || '0'),
-          logo: awayTeam?.team?.logo || ''
-        },
-        startTime: event.date
-      }
-    })
-  } catch (err) {
-    console.error('Error fetching live games:', err)
-    return []
-  }
-}
-
-// Get a specific game's status
-export async function getGameStatus(gameId: string): Promise<LiveGame | null> {
-  const games = await getLiveGames()
-  return games.find(g => g.id === gameId) || null
-}
-
-// Fetch detailed box score with player stats
-export async function getGameBoxScore(gameId: string): Promise<GameBoxScore | null> {
-  try {
-    const res = await fetch(
-      `https://site.api.espn.com/apis/site/v2/sports/football/nfl/summary?event=${gameId}`,
-      { next: { revalidate: 30 } }
-    )
-
-    if (!res.ok) {
-      console.error('ESPN summary fetch failed:', res.status)
-      return null
-    }
-
-    const data = await res.json()
-    const boxscore = data.boxscore
-    const status = data.header?.competitions?.[0]?.status
-
-    if (!boxscore) {
-      return null
-    }
-
-    const players: PlayerStats[] = []
-
-    // Parse player stats from boxscore
-    // ESPN structures this by team, then by stat category
-    boxscore.players?.forEach((teamPlayers: any) => {
-      const teamId = teamPlayers.team?.id || ''
-      const teamAbbr = teamPlayers.team?.abbreviation || ''
-
-      teamPlayers.statistics?.forEach((statCategory: any) => {
-        const statName = statCategory.name?.toLowerCase() || ''
-        
-        statCategory.athletes?.forEach((athlete: any) => {
-          const playerId = athlete.athlete?.id || ''
-          const playerName = athlete.athlete?.displayName || ''
-          
-          // Find or create player entry
-          let playerEntry = players.find(p => p.playerId === playerId)
-          if (!playerEntry) {
-            playerEntry = {
-              playerId,
-              playerName,
-              teamId,
-              teamAbbr,
-              passingYards: 0,
-              rushingYards: 0,
-              receivingYards: 0,
-              passingTouchdowns: 0,
-              rushingTouchdowns: 0,
-              receivingTouchdowns: 0,
-              receptions: 0,
-              interceptions: 0,
-              completions: 0,
-              attempts: 0
-            }
-            players.push(playerEntry)
-          }
-
-          // Parse stats based on category
-          const stats = athlete.stats || []
-          
-          if (statName === 'passing') {
-            // Format: C/ATT, YDS, AVG, TD, INT, SACKS, QBR, RTG
-            const [compAtt] = stats
-            if (compAtt && compAtt.includes('/')) {
-              const [comp, att] = compAtt.split('/')
-              playerEntry.completions = parseInt(comp) || 0
-              playerEntry.attempts = parseInt(att) || 0
-            }
-            playerEntry.passingYards = parseInt(stats[1]) || 0
-            playerEntry.passingTouchdowns = parseInt(stats[3]) || 0
-            playerEntry.interceptions = parseInt(stats[4]) || 0
-          } else if (statName === 'rushing') {
-            // Format: CAR, YDS, AVG, TD, LONG
-            playerEntry.rushingYards = parseInt(stats[1]) || 0
-            playerEntry.rushingTouchdowns = parseInt(stats[3]) || 0
-          } else if (statName === 'receiving') {
-            // Format: REC, YDS, AVG, TD, LONG, TGTS
-            playerEntry.receptions = parseInt(stats[0]) || 0
-            playerEntry.receivingYards = parseInt(stats[1]) || 0
-            playerEntry.receivingTouchdowns = parseInt(stats[3]) || 0
-          }
-        })
-      })
-    })
-
-    return {
-      gameId,
-      status: {
-        type: status?.type?.state === 'pre' ? 'pre' : 
-              status?.type?.state === 'in' ? 'in' : 'post',
-        description: status?.type?.description || 'Unknown',
-        period: status?.period || 0,
-        clock: status?.displayClock || '',
-        completed: status?.type?.completed || false
-      },
-      players
-    }
-  } catch (err) {
-    console.error('Error fetching box score:', err)
-    return null
-  }
-}
-
-// Get stats for a specific player in a game
-export async function getPlayerGameStats(
-  gameId: string, 
-  playerName: string
-): Promise<PlayerStats | null> {
-  const boxScore = await getGameBoxScore(gameId)
-  if (!boxScore) return null
-
-  // Find player by name (fuzzy match)
-  const normalizedSearch = playerName.toLowerCase().trim()
-  
-  const player = boxScore.players.find(p => {
-    const normalizedName = p.playerName.toLowerCase()
-    return normalizedName === normalizedSearch || 
-           normalizedName.includes(normalizedSearch) ||
-           normalizedSearch.includes(normalizedName)
-  })
-
-  return player || null
-}
-
 // Get the relevant stat value for a pick
 export function getStatValue(stats: PlayerStats, statType: string): number {
   const type = statType.toLowerCase()
@@ -248,7 +60,7 @@ export function getStatValue(stats: PlayerStats, statType: string): number {
     return stats.passingYards
   } else if (type.includes('rush') && type.includes('yard')) {
     return stats.rushingYards
-  } else if (type.includes('receiv') && type.includes('yard')) {
+  } else if ((type.includes('receiv') || type.includes('rec')) && type.includes('yard')) {
     return stats.receivingYards
   } else if (type.includes('reception')) {
     return stats.receptions
@@ -309,3 +121,112 @@ export function calculatePace(
   return Math.round(projectedFinal)
 }
 
+// Parse ESPN boxscore data into PlayerStats
+export function parseBoxScore(boxscore: any): PlayerStats[] {
+  const players: PlayerStats[] = []
+
+  boxscore?.players?.forEach((teamPlayers: any) => {
+    const teamId = teamPlayers.team?.id || ''
+    const teamAbbr = teamPlayers.team?.abbreviation || ''
+
+    teamPlayers.statistics?.forEach((statCategory: any) => {
+      const statName = statCategory.name?.toLowerCase() || ''
+      
+      statCategory.athletes?.forEach((athlete: any) => {
+        const playerId = athlete.athlete?.id || ''
+        const playerName = athlete.athlete?.displayName || ''
+        
+        // Find or create player entry
+        let playerEntry = players.find(p => p.playerId === playerId)
+        if (!playerEntry) {
+          playerEntry = {
+            playerId,
+            playerName,
+            teamId,
+            teamAbbr,
+            passingYards: 0,
+            rushingYards: 0,
+            receivingYards: 0,
+            passingTouchdowns: 0,
+            rushingTouchdowns: 0,
+            receivingTouchdowns: 0,
+            receptions: 0,
+            interceptions: 0,
+            completions: 0,
+            attempts: 0
+          }
+          players.push(playerEntry)
+        }
+
+        // Parse stats based on category
+        const stats = athlete.stats || []
+        
+        if (statName === 'passing') {
+          // Format: C/ATT, YDS, AVG, TD, INT, SACKS, QBR, RTG
+          const [compAtt] = stats
+          if (compAtt && compAtt.includes('/')) {
+            const [comp, att] = compAtt.split('/')
+            playerEntry.completions = parseInt(comp) || 0
+            playerEntry.attempts = parseInt(att) || 0
+          }
+          playerEntry.passingYards = parseInt(stats[1]) || 0
+          playerEntry.passingTouchdowns = parseInt(stats[3]) || 0
+          playerEntry.interceptions = parseInt(stats[4]) || 0
+        } else if (statName === 'rushing') {
+          // Format: CAR, YDS, AVG, TD, LONG
+          playerEntry.rushingYards = parseInt(stats[1]) || 0
+          playerEntry.rushingTouchdowns = parseInt(stats[3]) || 0
+        } else if (statName === 'receiving') {
+          // Format: REC, YDS, AVG, TD, LONG, TGTS
+          playerEntry.receptions = parseInt(stats[0]) || 0
+          playerEntry.receivingYards = parseInt(stats[1]) || 0
+          playerEntry.receivingTouchdowns = parseInt(stats[3]) || 0
+        }
+      })
+    })
+  })
+
+  return players
+}
+
+// Parse game status from ESPN data
+export function parseGameStatus(status: any): LiveGame['status'] {
+  return {
+    type: status?.type?.state === 'pre' ? 'pre' : 
+          status?.type?.state === 'in' ? 'in' : 'post',
+    description: status?.type?.description || 'Unknown',
+    period: status?.period || 0,
+    clock: status?.displayClock || '',
+    completed: status?.type?.completed || false
+  }
+}
+
+// Parse single game from ESPN data
+export function parseGame(event: any): LiveGame {
+  const competition = event.competitions?.[0]
+  const homeTeam = competition?.competitors?.find((c: any) => c.homeAway === 'home')
+  const awayTeam = competition?.competitors?.find((c: any) => c.homeAway === 'away')
+  const status = event.status
+
+  return {
+    id: event.id,
+    name: event.name,
+    shortName: event.shortName,
+    status: parseGameStatus(status),
+    homeTeam: {
+      id: homeTeam?.team?.id || '',
+      name: homeTeam?.team?.displayName || '',
+      abbreviation: homeTeam?.team?.abbreviation || '',
+      score: parseInt(homeTeam?.score || '0'),
+      logo: homeTeam?.team?.logo || ''
+    },
+    awayTeam: {
+      id: awayTeam?.team?.id || '',
+      name: awayTeam?.team?.displayName || '',
+      abbreviation: awayTeam?.team?.abbreviation || '',
+      score: parseInt(awayTeam?.score || '0'),
+      logo: awayTeam?.team?.logo || ''
+    },
+    startTime: event.date
+  }
+}
