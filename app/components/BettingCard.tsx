@@ -63,11 +63,21 @@ export function BettingCard({ player, team, opponent, stat, line, odds, type, al
     return () => { mounted = false }
   }, [player])
 
-  // Convert slider value (0-100) to line index
+  // Convert slider value (0-100) to line index - SNAP to exact lines
   const getSelectedLineIndex = () => {
     if (alternateLines.length === 0) return 0
+    // Direct mapping: slider position maps exactly to line index
     const index = Math.round((sliderValue / 100) * (alternateLines.length - 1))
     return Math.max(0, Math.min(index, alternateLines.length - 1))
+  }
+
+  // Snap slider to discrete positions (one per alternate line)
+  const snapToLine = (percentage: number) => {
+    if (alternateLines.length <= 1) return percentage
+    const steps = alternateLines.length - 1
+    const stepSize = 100 / steps
+    const snappedStep = Math.round(percentage / stepSize)
+    return snappedStep * stepSize
   }
   
   // Get the selected line data
@@ -112,14 +122,16 @@ export function BettingCard({ player, team, opponent, stat, line, odds, type, al
     )`
   }
 
-  // Handle slider drag
+  // Handle slider drag - SNAP to each line for precise control
   const handleSliderInteraction = (clientX: number) => {
     if (!sliderRef.current) return
     
     const rect = sliderRef.current.getBoundingClientRect()
     const x = clientX - rect.left
-    const percentage = Math.max(0, Math.min(100, (x / rect.width) * 100))
-    setSliderValue(percentage)
+    const rawPercentage = Math.max(0, Math.min(100, (x / rect.width) * 100))
+    // Snap to discrete line positions
+    const snappedPercentage = snapToLine(rawPercentage)
+    setSliderValue(snappedPercentage)
   }
 
   const handleMouseDown = (e: React.MouseEvent) => {
@@ -381,28 +393,60 @@ export function BettingCard({ player, team, opponent, stat, line, odds, type, al
                   }}></div>
                 </div>
 
-                {/* Tick marks */}
+                {/* Tick marks - one for EACH alternate line */}
                 <div style={{
                   position: 'absolute',
                   top: '50%',
                   left: 0,
                   right: 0,
-                  height: '16px',
+                  height: '20px',
                   transform: 'translateY(-50%)',
                   display: 'flex',
                   justifyContent: 'space-between',
-                  padding: '0 2px',
+                  padding: '0 0',
                   pointerEvents: 'none'
                 }}>
-                  {alternateLines.filter((_, i) => i % Math.ceil(alternateLines.length / 7) === 0).map((_, i) => (
-                    <div key={i} style={{
-                      width: '2px',
-                      height: '16px',
-                      backgroundColor: '#333',
-                      borderRadius: '1px'
-                    }}></div>
-                  ))}
+                  {alternateLines.map((altLine, i) => {
+                    const isSelected = i === selectedLineIndex
+                    return (
+                      <div key={i} style={{
+                        width: isSelected ? '3px' : '2px',
+                        height: isSelected ? '20px' : '12px',
+                        backgroundColor: isSelected ? getRiskColor(altLine.riskLabel) : '#333',
+                        borderRadius: '1px',
+                        transition: 'all 0.15s',
+                        opacity: isSelected ? 1 : 0.5
+                      }}></div>
+                    )
+                  })}
                 </div>
+              </div>
+
+              {/* Current Line Details */}
+              <div style={{
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                gap: '8px',
+                marginTop: '12px',
+                padding: '8px 16px',
+                backgroundColor: '#111',
+                borderRadius: '8px',
+                border: `1px solid ${getRiskColor(riskLabel)}30`
+              }}>
+                <span style={{ fontSize: '11px', color: '#666' }}>Line</span>
+                <span style={{ fontSize: '13px', fontWeight: 700, color: '#fff' }}>{selectedLineIndex + 1}</span>
+                <span style={{ fontSize: '11px', color: '#666' }}>of</span>
+                <span style={{ fontSize: '13px', fontWeight: 700, color: '#fff' }}>{alternateLines.length}</span>
+                <span style={{ fontSize: '11px', color: '#444', marginLeft: '8px' }}>|</span>
+                <span style={{ 
+                  fontSize: '12px', 
+                  fontWeight: 600, 
+                  color: getRiskColor(riskLabel),
+                  marginLeft: '8px'
+                }}>
+                  {targetYards}+ @ {formatOdds(selectedLine.odds)}
+                </span>
               </div>
 
               {/* Line Range Indicator */}
