@@ -502,6 +502,20 @@ export default function Home() {
                 <span className="btn-text">🏆 Tournaments</span>
                 <span className="arrow">→</span>
               </Link>
+              
+              {/* Live Tracking Button */}
+              <Link
+                href="/live"
+                className="psl-glass-btn"
+                style={{ 
+                  background: 'linear-gradient(135deg, rgba(255, 0, 0, 0.1) 0%, rgba(200, 0, 0, 0.05) 100%)',
+                  borderColor: 'rgba(255, 0, 0, 0.3)'
+                }}
+              >
+                <span className="dot" style={{ background: '#ff4444', boxShadow: '0 0 10px #ff4444', animation: 'pulse 1.5s infinite' }}></span>
+                <span className="btn-text">📊 Live Tracking</span>
+                <span className="arrow">→</span>
+              </Link>
             </div>
 
             {/* NFL Team Logos Marquee */}
