@@ -1,8 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { User } from "lucide-react"
-import { getPlayerId, getPlayerHeadshotUrl } from "../lib/espn"
+import { User, Lock, Check } from "lucide-react"
 
 interface OpponentRevealProps {
   onComplete: (opponentPick: any) => void
@@ -11,9 +10,9 @@ interface OpponentRevealProps {
 
 export function OpponentReveal({ onComplete, availableProps }: OpponentRevealProps) {
   const [step, setStep] = useState(0)
-  const [headshotUrl, setHeadshotUrl] = useState<string | null>(null)
   
   // Bot Logic: Pick a random player and a random line from their alternates
+  // This data is stored but NOT revealed to the user
   const [opponentPick] = useState(() => {
     const randomProp = availableProps[Math.floor(Math.random() * availableProps.length)] || { player: "Opponent", stat: "Props" }
     
@@ -47,18 +46,13 @@ export function OpponentReveal({ onComplete, availableProps }: OpponentRevealPro
     }
   })
 
-  // Fetch headshot for opponent's pick
   useEffect(() => {
-    if (opponentPick?.player) {
-      getPlayerId(opponentPick.player).then(id => {
-        if (id) setHeadshotUrl(getPlayerHeadshotUrl(id))
-      })
-    }
-  }, [opponentPick])
-
-  useEffect(() => {
-    setTimeout(() => setStep(1), 1500)
-    setTimeout(() => onComplete(opponentPick), 4500) // Pass the pick back
+    // Show "locking" animation
+    setTimeout(() => setStep(1), 1200)
+    // Show "locked" confirmation
+    setTimeout(() => setStep(2), 2400)
+    // Complete and move on - pick data is passed but NOT displayed
+    setTimeout(() => onComplete(opponentPick), 3500)
   }, [onComplete, opponentPick])
 
   return (
@@ -75,99 +69,105 @@ export function OpponentReveal({ onComplete, availableProps }: OpponentRevealPro
         }}>
           
           {/* Header */}
-          <div style={{ padding: '20px 20px 16px', textAlign: 'center' }}>
-            {/* Icon */}
+          <div style={{ padding: '28px 20px', textAlign: 'center' }}>
+            {/* Animated Lock Icon */}
             <div style={{ 
-              width: 48, 
-              height: 48, 
-              margin: '0 auto 12px',
+              width: 64, 
+              height: 64, 
+              margin: '0 auto 16px',
               borderRadius: '50%',
-              backgroundColor: '#1a1a1a',
-              border: '1px solid #333',
+              backgroundColor: step >= 2 ? 'rgba(0, 255, 0, 0.1)' : '#1a1a1a',
+              border: step >= 2 ? '2px solid rgba(0, 255, 0, 0.3)' : '2px solid #333',
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'center'
+              justifyContent: 'center',
+              transition: 'all 0.3s ease'
             }}>
-              <User style={{ width: 24, height: 24, color: '#555' }} />
+              {step >= 2 ? (
+                <Check style={{ width: 28, height: 28, color: '#00FF00' }} />
+              ) : (
+                <Lock 
+                  style={{ 
+                    width: 28, 
+                    height: 28, 
+                    color: step >= 1 ? '#ff6b35' : '#555',
+                    transition: 'color 0.3s ease'
+                  }} 
+                  className={step === 1 ? 'animate-pulse' : ''}
+                />
+              )}
             </div>
             
-            <h2 style={{ fontSize: '18px', fontWeight: 700, color: '#fff', fontStyle: 'italic', marginBottom: '4px' }}>
-              OPPONENT LOCKED IN
+            <h2 style={{ 
+              fontSize: '20px', 
+              fontWeight: 700, 
+              color: '#fff', 
+              marginBottom: '8px',
+              letterSpacing: '-0.02em'
+            }}>
+              {step === 0 && 'OPPONENT SELECTING...'}
+              {step === 1 && 'LOCKING IN PICK...'}
+              {step === 2 && 'OPPONENT LOCKED'}
             </h2>
-            <p style={{ fontSize: '10px', color: '#555', textTransform: 'uppercase', letterSpacing: '0.15em' }} className="animate-pulse">
-              Analyzing Strategy...
+            
+            <p style={{ 
+              fontSize: '11px', 
+              color: step >= 2 ? '#00FF00' : '#666', 
+              textTransform: 'uppercase', 
+              letterSpacing: '0.12em',
+              transition: 'color 0.3s ease'
+            }}>
+              {step >= 2 ? 'Pick secured • Hidden until kickoff' : 'Analyzing matchups...'}
             </p>
           </div>
 
-          {/* Inner Content Area */}
-          {step === 1 && (
+          {/* Hidden Pick Indicator */}
+          <div style={{ 
+            margin: '0 16px 16px',
+            backgroundColor: '#0a0a0a',
+            borderRadius: '12px',
+            border: '1px solid #1a1a1a',
+            padding: '20px',
+            textAlign: 'center'
+          }}>
             <div style={{ 
-              margin: '0 12px 12px',
-              backgroundColor: '#0a0a0a',
-              borderRadius: '14px',
-              border: '1px solid #1a1a1a',
-              overflow: 'hidden'
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'center',
+              gap: '8px',
+              marginBottom: '8px'
             }}>
-              {/* Player They Picked */}
-              <div style={{ padding: '16px', textAlign: 'center', borderBottom: '1px solid #1a1a1a' }}>
-                <div style={{ fontSize: '9px', color: '#555', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: '12px' }}>
-                  They Picked
-                </div>
-                
-                {/* Player Headshot */}
-                <div style={{ 
-                  width: 56, 
-                  height: 56, 
-                  borderRadius: '50%', 
-                  overflow: 'hidden', 
-                  margin: '0 auto 10px', 
-                  backgroundColor: '#161616', 
-                  border: '2px solid #333' 
-                }}>
-                  {headshotUrl ? (
-                    <img 
-                      src={headshotUrl} 
-                      alt={opponentPick.player}
-                      style={{ width: 56, height: 56, objectFit: 'cover' }}
-                      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
-                    />
-                  ) : (
-                    <div style={{ width: 56, height: 56, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#555', fontSize: 20, fontWeight: 600 }}>
-                      {opponentPick.player?.charAt(0) || '?'}
-                    </div>
-                  )}
-                </div>
-                
-                <div style={{ fontSize: '16px', fontWeight: 600, color: '#fff', marginBottom: '2px' }}>{opponentPick.player}</div>
-                <div style={{ fontSize: '10px', color: '#666', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{opponentPick.stat}</div>
-                
-                {/* Line they selected */}
-                <div style={{ 
-                  marginTop: '8px',
-                  padding: '6px 12px',
-                  backgroundColor: '#111',
-                  borderRadius: '6px',
-                  display: 'inline-block'
-                }}>
-                  <span style={{ fontSize: '14px', fontWeight: 600, color: '#fff' }}>{opponentPick.line}+ yards</span>
-                </div>
-              </div>
-
-              {/* Strategy & Points */}
-              <div style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <div style={{ 
-                  fontSize: '18px', 
-                  fontWeight: 700, 
-                  color: opponentPick.isAggressive ? '#ff6b35' : '#00FF00' 
-                }}>
-                  {opponentPick.strategy}
-                </div>
-                <div style={{ fontSize: '24px', fontWeight: 600, color: '#fff' }}>
-                  {opponentPick.points} PTS
-                </div>
-              </div>
+              <Lock size={14} style={{ color: '#ff6b35' }} />
+              <span style={{ fontSize: '12px', fontWeight: 600, color: '#ff6b35', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+                Pick Hidden
+              </span>
             </div>
-          )}
+            <p style={{ fontSize: '11px', color: '#555', lineHeight: 1.5 }}>
+              Opponent's selection is locked and hidden to ensure fair play. 
+              All picks revealed when games start.
+            </p>
+          </div>
+
+          {/* Progress Dots */}
+          <div style={{ 
+            display: 'flex', 
+            justifyContent: 'center', 
+            gap: '8px', 
+            paddingBottom: '20px' 
+          }}>
+            {[0, 1, 2].map((i) => (
+              <div 
+                key={i}
+                style={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: '50%',
+                  backgroundColor: step >= i ? (step === 2 ? '#00FF00' : '#ff6b35') : '#333',
+                  transition: 'all 0.3s ease'
+                }}
+              />
+            ))}
+          </div>
         </div>
       </div>
     </div>

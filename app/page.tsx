@@ -130,12 +130,12 @@ function SummaryPickRow({ pick, isYou }: { pick: any; isYou: boolean }) {
   const [imageError, setImageError] = useState(false)
 
   useEffect(() => {
-    if (pick.player) {
+    if (pick.player && isYou) {
       getPlayerId(pick.player).then(id => {
         if (id) setHeadshotUrl(getPlayerHeadshotUrl(id))
       })
     }
-  }, [pick.player])
+  }, [pick.player, isYou])
 
   const points = pick.potentialPoints ?? pick.points ?? 5
   const line = pick.finalLine ?? pick.line ?? '—'
@@ -162,7 +162,7 @@ function SummaryPickRow({ pick, isYou }: { pick: any; isYou: boolean }) {
         border: `1px solid ${accentColor}40`,
         flexShrink: 0
       }}>
-        {headshotUrl && !imageError ? (
+        {isYou && headshotUrl && !imageError ? (
           <img 
             src={headshotUrl} 
             alt={pick.player}
@@ -171,18 +171,18 @@ function SummaryPickRow({ pick, isYou }: { pick: any; isYou: boolean }) {
           />
         ) : (
           <div style={{ width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#555', fontSize: 10, fontWeight: 500 }}>
-            {pick.player?.charAt(0) || '?'}
+            {isYou ? (pick.player?.charAt(0) || '?') : '?'}
           </div>
         )}
       </div>
       
       {/* Info */}
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: '11px', fontWeight: 500, color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-          {pick.player}
+        <div style={{ fontSize: '11px', fontWeight: 500, color: isYou ? '#fff' : '#555', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          {isYou ? pick.player : 'LOCKED'}
         </div>
         <div style={{ fontSize: '9px', color: '#666' }}>
-          {line}+ {pick.stat?.replace(' Yards', '').replace('Passing', 'Pass').replace('Receiving', 'Rec').replace('Rushing', 'Rush')}
+          {isYou ? `${line}+ ${pick.stat?.replace(' Yards', '').replace('Passing', 'Pass').replace('Receiving', 'Rec').replace('Rushing', 'Rush')}` : 'Hidden until kickoff'}
         </div>
       </div>
       
@@ -190,11 +190,11 @@ function SummaryPickRow({ pick, isYou }: { pick: any; isYou: boolean }) {
       <div style={{ 
         fontSize: '13px', 
         fontWeight: 600, 
-        color: points > 2 ? '#00FF00' : points < 1.5 ? '#ef4444' : '#fff',
+        color: isYou ? (points > 2 ? '#00FF00' : points < 1.5 ? '#ef4444' : '#fff') : '#555',
         flexShrink: 0,
         fontVariantNumeric: 'tabular-nums'
       }}>
-        {typeof points === 'number' ? points.toFixed(2) : points}
+        {isYou ? (typeof points === 'number' ? points.toFixed(2) : points) : '—'}
       </div>
     </div>
   )
@@ -743,7 +743,7 @@ export default function Home() {
               const yourPicks = picks.slice(0, 5)
               const theirPicks = opponentPicks.slice(0, 5)
               const yourTotal = yourPicks.reduce((sum, p) => sum + (p.potentialPoints || 5), 0)
-              const theirTotal = theirPicks.reduce((sum, p) => sum + (p.points || 5), 0)
+              // Opponent total is hidden until games start
               
               return (
                 <div className="w-full max-w-[420px] mx-auto">
@@ -759,8 +759,11 @@ export default function Home() {
                     {/* Header */}
                     <div style={{ padding: '16px 16px 12px', textAlign: 'center', borderBottom: '1px solid #1a1a1a' }}>
                       <h1 style={{ fontSize: '20px', fontWeight: 300, color: '#fff', marginBottom: '4px' }}>
-                        DRAFT <span style={{ color: '#00FF00', fontWeight: 600 }}>COMPLETE</span>
+                        CONTEST <span style={{ color: '#FFD700', fontWeight: 600 }}>PENDING</span>
                       </h1>
+                      <p style={{ fontSize: '10px', color: '#666', textTransform: 'uppercase', letterSpacing: '0.1em', marginTop: '4px' }}>
+                        Waiting for Live Data Feed
+                      </p>
                       
                       {isDoubledDown && (
                         <div style={{ 
@@ -779,7 +782,7 @@ export default function Home() {
                       )}
                     </div>
 
-                    {/* Payout & Score Summary */}
+                    {/* Payout & Score Summary - Opponent score hidden */}
                     <div style={{ 
                       margin: '12px 12px 0',
                       padding: '16px',
@@ -792,15 +795,15 @@ export default function Home() {
                     }}>
                       <div style={{ textAlign: 'center' }}>
                         <div style={{ fontSize: '28px', fontWeight: 600, color: '#00FF00', fontVariantNumeric: 'tabular-nums' }}>{yourTotal.toFixed(2)}</div>
-                        <div style={{ fontSize: '9px', color: '#00FF00', textTransform: 'uppercase', letterSpacing: '0.1em' }}>You</div>
+                        <div style={{ fontSize: '9px', color: '#00FF00', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Your Draft</div>
                       </div>
                       <div style={{ textAlign: 'center' }}>
-                        <div style={{ fontSize: '24px', fontWeight: 300, color: '#00FF00' }}>${potentialPayout}</div>
-                        <div style={{ fontSize: '8px', color: '#555', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Payout</div>
+                        <div style={{ fontSize: '24px', fontWeight: 300, color: '#FFD700' }}>${potentialPayout}</div>
+                        <div style={{ fontSize: '8px', color: '#555', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Potential</div>
                       </div>
                       <div style={{ textAlign: 'center' }}>
-                        <div style={{ fontSize: '28px', fontWeight: 600, color: '#ff6b35', fontVariantNumeric: 'tabular-nums' }}>{theirTotal.toFixed(2)}</div>
-                        <div style={{ fontSize: '9px', color: '#ff6b35', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Opp</div>
+                        <div style={{ fontSize: '28px', fontWeight: 600, color: '#555', fontVariantNumeric: 'tabular-nums' }}>—</div>
+                        <div style={{ fontSize: '9px', color: '#555', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Opp (Hidden)</div>
                       </div>
                     </div>
 
@@ -821,9 +824,12 @@ export default function Home() {
                           </div>
                         </div>
                         <div style={{ flex: 1, padding: '10px 8px' }}>
-                          <div style={{ fontSize: '9px', color: '#ff6b35', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.1em', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                            <span style={{ width: 5, height: 5, borderRadius: '50%', backgroundColor: '#ff6b35' }}></span>
-                            Opponent
+                          <div style={{ fontSize: '9px', color: '#555', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.1em', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#555" strokeWidth="2">
+                              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                              <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                            </svg>
+                            Opponent (Locked)
                           </div>
                         </div>
                       </div>
@@ -837,12 +843,36 @@ export default function Home() {
                           ))}
                         </div>
                         
-                        {/* Opponent Picks Column */}
+                        {/* Opponent Picks Column - All locked */}
                         <div style={{ flex: 1, padding: '8px' }}>
                           {theirPicks.map((p, i) => (
                             <SummaryPickRow key={i} pick={{...p, potentialPoints: p.points, finalLine: p.line}} isYou={false} />
                           ))}
                         </div>
+                      </div>
+                    </div>
+                    
+                    {/* Pending Notice */}
+                    <div style={{
+                      margin: '0 12px 12px',
+                      padding: '12px 16px',
+                      backgroundColor: 'rgba(255, 215, 0, 0.05)',
+                      borderRadius: '10px',
+                      border: '1px solid rgba(255, 215, 0, 0.2)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '10px'
+                    }}>
+                      <div style={{ 
+                        width: 8, 
+                        height: 8, 
+                        borderRadius: '50%', 
+                        backgroundColor: '#FFD700',
+                        animation: 'pulse 2s infinite'
+                      }}></div>
+                      <div>
+                        <div style={{ fontSize: '11px', fontWeight: 600, color: '#FFD700' }}>Awaiting Kickoff</div>
+                        <div style={{ fontSize: '10px', color: '#666' }}>Scoring begins when games start. All picks revealed at kickoff.</div>
                       </div>
                     </div>
 
