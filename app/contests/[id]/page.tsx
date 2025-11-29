@@ -175,9 +175,12 @@ export default function ContestDetailPage() {
   const isCompleted = contest.status === 'completed'
   const gamesStarted = new Date(contest.gameTime) <= new Date()
   
-  // CRITICAL: Opponent data is ONLY visible when contest is fully completed
-  // During open/live: only show your own data
-  const canRevealAllData = isCompleted && (liveStatus?.allGamesCompleted ?? false)
+  // NEW VISIBILITY LOGIC:
+  // Pre-game: ALL picks hidden (even your own to others)
+  // Once ANY game starts: FULL transparency - reveal everything to everyone
+  // Live leaderboard with real-time point fluctuations
+  const hasAnyGameStarted = liveStatus?.hasGamesStarted ?? gamesStarted
+  const canRevealAllData = hasAnyGameStarted || isLive || isCompleted
 
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-white relative overflow-hidden" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
@@ -285,32 +288,32 @@ export default function ContestDetailPage() {
           </div>
         </div>
 
-        {/* Pre-Game Notice - picks are hidden */}
-        {contest.status === 'open' && (
+        {/* Pre-Game Notice - ALL picks hidden until kickoff */}
+        {contest.status === 'open' && !hasAnyGameStarted && (
           <div className="mb-8 p-4 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex items-center gap-4">
             <Lock size={20} className="text-blue-400 shrink-0" />
             <div>
-              <div className="font-bold text-blue-400">Contest Open - Awaiting Kickoff</div>
-              <div className="text-sm text-white/50">Other players' picks and scores are hidden until the contest concludes. You can only see your own lineup.</div>
+              <div className="font-bold text-blue-400">All Picks Locked & Hidden</div>
+              <div className="text-sm text-white/50">Everyone's picks are hidden until games begin. Once kickoff happens, all picks will be revealed and live scoring starts!</div>
             </div>
           </div>
         )}
 
-        {/* Live Scoring Notice */}
-        {isLive && !canRevealAllData && (
+        {/* Live Scoring Notice - Full transparency mode */}
+        {canRevealAllData && !isCompleted && (
           <div className="mb-8 p-4 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center gap-4">
             <Radio size={20} className="text-red-400 animate-pulse shrink-0" />
             <div className="flex-1">
               <div className="font-bold text-red-400 flex items-center gap-2">
-                Live Scoring Active
-                {liveStatus && (
+                🔴 LIVE - All Picks Revealed
+                {liveStatus && liveStatus.inProgressCount > 0 && (
                   <span className="text-xs font-normal text-white/40">
                     ({liveStatus.inProgressCount} games in progress)
                   </span>
                 )}
               </div>
               <div className="text-sm text-white/50">
-                Scores update every 30 seconds from ESPN. Opponent picks remain hidden until all games are final.
+                Full transparency! Everyone's picks are visible. Points update in real-time as player stats change.
               </div>
               {lastUpdate && (
                 <div className="text-xs text-white/30 mt-1">
@@ -318,17 +321,17 @@ export default function ContestDetailPage() {
                 </div>
               )}
             </div>
-            <EyeOff size={16} className="text-white/30" />
+            <Eye size={16} className="text-[#00FF00]" />
           </div>
         )}
 
-        {/* Contest Complete - All Revealed */}
-        {canRevealAllData && (
+        {/* Contest Complete */}
+        {isCompleted && (
           <div className="mb-8 p-4 rounded-2xl bg-[#00FF00]/10 border border-[#00FF00]/20 flex items-center gap-4">
-            <Eye size={20} className="text-[#00FF00] shrink-0" />
+            <Trophy size={20} className="text-[#00FF00] shrink-0" />
             <div>
-              <div className="font-bold text-[#00FF00]">Contest Complete - Results Final</div>
-              <div className="text-sm text-white/50">All games have concluded. Full leaderboard and picks are now visible.</div>
+              <div className="font-bold text-[#00FF00]">Contest Complete - Final Results</div>
+              <div className="text-sm text-white/50">All games have concluded. Final standings and prizes are locked in.</div>
             </div>
           </div>
         )}
@@ -382,43 +385,43 @@ export default function ContestDetailPage() {
                     // Check if this is the current user's entry
                     const isOwnEntry = currentUserId && entry.oduserId === currentUserId
                     
-                    // CRITICAL: Ranks and prizes only shown after contest is FULLY completed
-                    const rank = canRevealAllData ? (entry.rank || index + 1) : (isOwnEntry ? '—' : '—')
-                    const isTop3 = canRevealAllData && (entry.rank || index + 1) <= 3
-                    const isInMoney = canRevealAllData && (entry.rank || index + 1) <= paidPositions
-                    const prize = isInMoney ? Math.floor(contest.prizePool / paidPositions) : 0
-                    
                     // Get live pick results for this entry
                     const entryResults = livePickResults.get(entry.id)
                     const liveHits = entryResults?.filter(r => r.hit === true).length ?? 0
-                    const liveMisses = entryResults?.filter(r => r.hit === false).length ?? 0
                     const pending = entryResults?.filter(r => r.hit === null).length ?? 5
                     
-                    // Points: Only show for own entry until contest completes
-                    // During live: show live-calculated points for own entry
+                    // Calculate live points from ESPN data
                     let displayPoints = 0
                     let displayHits = 0
                     
-                    if (isOwnEntry) {
-                      // Always show own data
-                      if (isLive && entryResults) {
+                    if (canRevealAllData) {
+                      // Games have started - show live data for everyone
+                      if (entryResults && entryResults.length > 0) {
                         displayHits = liveHits
-                        const basePoints = entryResults
-                          .filter(r => r.hit === true)
-                          .reduce((sum, r, i) => sum + entry.picks[i]?.points ?? 0, 0)
-                        displayPoints = liveHits === 0 ? 0 : basePoints * liveHits
+                        // Calculate points: sum of hit picks * multiplier
+                        let basePoints = 0
+                        entryResults.forEach((result, i) => {
+                          if (result.hit === true) {
+                            basePoints += entry.picks[i]?.points ?? 0
+                          }
+                        })
+                        displayPoints = displayHits === 0 ? 0 : basePoints * displayHits
                       } else {
+                        // Fallback to stored data
                         displayPoints = entry.totalPoints
                         displayHits = entry.hitsCount
                       }
-                    } else if (canRevealAllData) {
-                      // Contest complete - show all data
-                      displayPoints = entry.totalPoints
-                      displayHits = entry.hitsCount
                     }
+                    // Pre-game: displayPoints and displayHits stay at 0 (hidden)
                     
-                    // Can view picks if: it's your own entry OR contest is fully completed
-                    const canViewPicks = isOwnEntry || canRevealAllData
+                    // Rank based on current points (dynamic during live)
+                    const currentRank = canRevealAllData ? (entry.rank || index + 1) : '—'
+                    const isTop3 = canRevealAllData && (entry.rank || index + 1) <= 3
+                    const isInMoney = isCompleted && (entry.rank || index + 1) <= paidPositions
+                    const prize = isInMoney ? Math.floor(contest.prizePool / paidPositions) : 0
+                    
+                    // Can view picks once games start (full transparency)
+                    const canViewPicks = canRevealAllData
                     
                     return (
                       <div 
@@ -430,11 +433,11 @@ export default function ContestDetailPage() {
                       >
                         <div className="col-span-1 font-medium text-white/50">
                           {canRevealAllData && isTop3 ? (
-                            rank === 1 ? <Crown size={16} className="text-yellow-500 fill-yellow-500" /> :
-                            rank === 2 ? <Medal size={16} className="text-gray-300" /> :
+                            currentRank === 1 ? <Crown size={16} className="text-yellow-500 fill-yellow-500" /> :
+                            currentRank === 2 ? <Medal size={16} className="text-gray-300" /> :
                             <Medal size={16} className="text-amber-600" />
                           ) : (
-                            <span className={isOwnEntry ? 'text-[#00FF00]' : 'text-white/30'}>{rank}</span>
+                            <span className={canRevealAllData ? 'text-white/50' : 'text-white/20'}>{currentRank}</span>
                           )}
                         </div>
                         
@@ -449,13 +452,13 @@ export default function ContestDetailPage() {
                               {entry.username}
                               {isOwnEntry && <span className="text-[9px] bg-[#00FF00]/20 text-[#00FF00] px-1.5 py-0.5 rounded">YOU</span>}
                             </span>
-                            {/* Only show "Winning" after contest fully complete */}
-                            {canRevealAllData && isInMoney && (
+                            {/* Show position in money only after complete */}
+                            {isCompleted && isInMoney && (
                               <span className="text-[10px] text-[#00FF00] font-medium md:hidden">Won ${prize}</span>
                             )}
                           </div>
-                          {/* Show multiplier badge only for own entry during live, or all after complete */}
-                          {(isOwnEntry || canRevealAllData) && displayHits > 0 && (
+                          {/* Show multiplier badge for everyone once games start */}
+                          {canRevealAllData && displayHits > 0 && (
                             <span className={`px-1.5 py-0.5 text-[10px] font-bold rounded uppercase tracking-wide border ${
                               displayHits === 5 
                                 ? 'bg-yellow-500/20 text-yellow-500 border-yellow-500/20' 
@@ -466,10 +469,16 @@ export default function ContestDetailPage() {
                               {displayHits}X
                             </span>
                           )}
+                          {/* Show pending indicator during live */}
+                          {canRevealAllData && !isCompleted && pending > 0 && pending < 5 && (
+                            <span className="text-[10px] text-white/30 bg-white/5 px-1.5 py-0.5 rounded">
+                              {pending} left
+                            </span>
+                          )}
                         </div>
 
                         <div className="col-span-2 text-center">
-                          {isOwnEntry || canRevealAllData ? (
+                          {canRevealAllData ? (
                             <div className={`inline-flex items-center justify-center px-2 py-1 rounded-md text-xs font-bold ${
                               displayHits === 5 ? 'bg-[#00FF00]/20 text-[#00FF00]' : 
                               displayHits > 0 ? 'bg-white/10 text-white/70' :
@@ -486,20 +495,15 @@ export default function ContestDetailPage() {
                         </div>
 
                         <div className="col-span-3 md:col-span-2 text-right">
-                          {isOwnEntry || canRevealAllData ? (
+                          {canRevealAllData ? (
                             <>
                               <div className={`text-lg font-bold ${
-                                canRevealAllData && entry.isPerfect ? 'text-yellow-500' : 
+                                entry.isPerfect ? 'text-yellow-500' : 
                                 displayPoints > 0 ? 'text-white' : 'text-white/30'
                               }`} style={{ fontVariantNumeric: 'tabular-nums' }}>
                                 {displayPoints.toFixed(2)}
                               </div>
-                              {isOwnEntry && isLive && pending > 0 && (
-                                <div className="text-[10px] text-white/30">
-                                  {pending} pending
-                                </div>
-                              )}
-                              {canRevealAllData && isInMoney && (
+                              {isCompleted && isInMoney && (
                                 <div className="text-xs text-[#00FF00] font-medium hidden md:block">
                                   Won ${prize}
                                 </div>
@@ -529,8 +533,8 @@ export default function ContestDetailPage() {
                 <div className="px-6 py-3 border-t border-white/5 text-center">
                   <span className="text-xs text-white/30">
                     {canRevealAllData 
-                      ? 'Click on any player to view their picks and results'
-                      : 'Click on your entry to view your picks. Others hidden until contest concludes.'}
+                      ? 'Click on any player to view their picks and live stats'
+                      : 'All picks locked and hidden until games begin'}
                   </span>
                 </div>
               )}
@@ -649,9 +653,9 @@ export default function ContestDetailPage() {
                   <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-white/5 flex items-center justify-center">
                     <Lock size={32} className="text-white/30" />
                   </div>
-                  <h3 className="text-lg font-semibold text-white/80 mb-2">Picks Hidden</h3>
+                  <h3 className="text-lg font-semibold text-white/80 mb-2">Picks Locked</h3>
                   <p className="text-sm text-white/40 max-w-xs mx-auto">
-                    Other players' picks remain hidden until the contest concludes and all games are final. This ensures fair competition.
+                    All picks are hidden until games begin. Once kickoff happens, everyone's picks will be revealed with live scoring!
                   </p>
                 </div>
               ) : (
@@ -687,13 +691,13 @@ export default function ContestDetailPage() {
               <div className="p-4 border-t border-white/10 bg-black/20">
                 {picksHidden ? (
                   <div className="text-center text-white/40 text-sm py-2">
-                    Scores and picks revealed when contest concludes
+                    All picks revealed at kickoff with live scoring
                   </div>
                 ) : (
                   <div className="flex items-center justify-between">
                     <div>
                       <div className="text-xs text-white/40">
-                        {canRevealAllData ? 'Final Points' : isLive ? 'Current Points' : 'Potential Points'}
+                        {isCompleted ? 'Final Points' : 'Live Points'}
                       </div>
                       <div className="text-2xl font-bold text-white" style={{ fontVariantNumeric: 'tabular-nums' }}>
                         {selectedEntry.totalPoints.toFixed(2)}
@@ -702,16 +706,16 @@ export default function ContestDetailPage() {
                         )}
                       </div>
                     </div>
-                    {isLive && !canRevealAllData && (
+                    {!isCompleted && (
                       <div className="text-right">
                         <div className="text-xs text-white/40">Status</div>
                         <div className="text-sm font-medium text-red-400 flex items-center gap-1">
                           <Radio size={12} className="animate-pulse" />
-                          Scoring Live
+                          Live Scoring
                         </div>
                       </div>
                     )}
-                    {canRevealAllData && selectedEntry.prize && (
+                    {isCompleted && selectedEntry.prize && (
                       <div className="text-right">
                         <div className="text-xs text-white/40">Prize Won</div>
                         <div className="text-lg font-bold text-[#00FF00]">
