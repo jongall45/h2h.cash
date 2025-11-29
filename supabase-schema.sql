@@ -146,23 +146,16 @@ CREATE POLICY "Authenticated users can create entries" ON entries FOR INSERT WIT
 CREATE POLICY "Users can update own entries" ON entries FOR UPDATE USING (true);
 
 -- =============================================
--- SAMPLE DATA
+-- SINGLE TOURNAMENT - 50 ENTRIES
 -- =============================================
 
--- Clear existing sample contests and insert fresh ones
-DELETE FROM contests WHERE name IN ('🏆 NFL Sunday Main Event', '⚡ Mini Contest', '💎 High Roller', '🎯 Head-to-Head');
+-- Clear ALL existing contests
+DELETE FROM contests;
 
-INSERT INTO contests (name, type, entry_fee, max_entries, game_time, payout_structure, status)
+-- Single tournament: 50 entries, $25 entry fee, top 5 paid
+INSERT INTO contests (name, type, entry_fee, max_entries, game_time, payout_structure, status, rake_percent)
 VALUES 
-  ('🏆 NFL Sunday Main Event', 'public', 25, 1000, NOW() + INTERVAL '2 days', 
-   '[{"place": "1st", "percent": 20}, {"place": "2nd", "percent": 12}, {"place": "3rd", "percent": 8}, {"place": "4th-5th", "percent": 10}, {"place": "6th-10th", "percent": 15}, {"place": "11th-25%", "percent": 35}]'::jsonb,
-   'open'),
-  ('⚡ Mini Contest', 'public', 5, 100, NOW() + INTERVAL '2 days',
-   '[{"place": "1st", "percent": 20}, {"place": "2nd", "percent": 12}, {"place": "3rd", "percent": 8}, {"place": "4th-5th", "percent": 10}, {"place": "6th-10th", "percent": 15}, {"place": "11th-25%", "percent": 35}]'::jsonb,
-   'open'),
-  ('💎 High Roller', 'public', 100, 50, NOW() + INTERVAL '2 days',
-   '[{"place": "1st", "percent": 50}, {"place": "2nd", "percent": 30}, {"place": "3rd", "percent": 20}]'::jsonb,
-   'open'),
-  ('🎯 Head-to-Head', 'public', 10, 2, NOW() + INTERVAL '2 days',
-   '[{"place": "1st", "percent": 100}]'::jsonb,
-   'open');
+  ('🏆 NFL Week 13 Tournament', 'public', 25, 50, NOW() + INTERVAL '1 day', 
+   '[{"place": "1st", "percent": 40}, {"place": "2nd", "percent": 25}, {"place": "3rd", "percent": 15}, {"place": "4th", "percent": 10}, {"place": "5th", "percent": 10}]'::jsonb,
+   'open',
+   10);
