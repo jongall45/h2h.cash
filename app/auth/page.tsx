@@ -27,23 +27,39 @@ export default function AuthPage() {
     setLoading(true)
     setError(null)
 
-    if (mode === 'signup') {
-      const { user, error } = await signUpWithEmail(email, password, username)
-      if (error) {
-        setError(error)
-      } else if (user) {
-        // Store user locally as backup
-        localStorage.setItem('h2h_user', JSON.stringify(user))
-        router.push('/contests')
+    // Add timeout to prevent infinite loading
+    const timeout = setTimeout(() => {
+      setLoading(false)
+      setError('Request timed out. Please try again.')
+    }, 15000)
+
+    try {
+      if (mode === 'signup') {
+        const { user, error } = await signUpWithEmail(email, password, username)
+        clearTimeout(timeout)
+        if (error) {
+          setError(error)
+        } else if (user) {
+          // Store user locally as backup
+          localStorage.setItem('h2h_user', JSON.stringify(user))
+          router.push('/contests')
+          return // Don't set loading false, we're navigating
+        }
+      } else {
+        const { user, error } = await signInWithEmail(email, password)
+        clearTimeout(timeout)
+        if (error) {
+          setError(error)
+        } else if (user) {
+          localStorage.setItem('h2h_user', JSON.stringify(user))
+          router.push('/contests')
+          return // Don't set loading false, we're navigating
+        }
       }
-    } else {
-      const { user, error } = await signInWithEmail(email, password)
-      if (error) {
-        setError(error)
-      } else if (user) {
-        localStorage.setItem('h2h_user', JSON.stringify(user))
-        router.push('/contests')
-      }
+    } catch (err) {
+      clearTimeout(timeout)
+      console.error('Auth error:', err)
+      setError('An unexpected error occurred. Please try again.')
     }
 
     setLoading(false)

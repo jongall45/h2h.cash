@@ -68,12 +68,15 @@ export async function signUpWithEmail(email: string, password: string, username:
 // Sign in with email
 export async function signInWithEmail(email: string, password: string): Promise<{ user: User | null; error: string | null }> {
   try {
+    console.log('Attempting sign in for:', email)
+    
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password
     })
 
     if (error) {
+      console.error('Supabase auth error:', error)
       return { user: null, error: error.message }
     }
 
@@ -81,27 +84,40 @@ export async function signInWithEmail(email: string, password: string): Promise<
       return { user: null, error: 'Failed to sign in' }
     }
 
-    // Get user profile
-    const { data: profile } = await supabase
-      .from('users')
-      .select('*')
-      .eq('id', data.user.id)
-      .single()
+    console.log('Auth successful, user id:', data.user.id)
 
-    return {
-      user: {
-        id: data.user.id,
-        email: data.user.email,
-        username: profile?.username || data.user.email?.split('@')[0] || 'User',
-        avatarUrl: profile?.avatar_url,
-        balance: profile?.balance || 0,
-        createdAt: profile?.created_at || data.user.created_at
-      },
-      error: null
+    // Try to get user profile, but don't fail if it doesn't exist
+    let profile = null
+    try {
+      const { data: profileData, error: profileError } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', data.user.id)
+        .single()
+      
+      if (!profileError) {
+        profile = profileData
+      } else {
+        console.log('No profile found, will use defaults')
+      }
+    } catch (profileErr) {
+      console.log('Profile fetch error (non-fatal):', profileErr)
     }
+
+    const user: User = {
+      id: data.user.id,
+      email: data.user.email,
+      username: profile?.username || data.user.email?.split('@')[0] || 'User',
+      avatarUrl: profile?.avatar_url,
+      balance: profile?.balance || 0,
+      createdAt: profile?.created_at || data.user.created_at
+    }
+
+    console.log('Returning user:', user.username)
+    return { user, error: null }
   } catch (err) {
     console.error('Sign in error:', err)
-    return { user: null, error: 'An unexpected error occurred' }
+    return { user: null, error: 'An unexpected error occurred. Please try again.' }
   }
 }
 
