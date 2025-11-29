@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import Link from "next/link"
 import { Trophy, Users, Clock, ChevronRight, Plus, Lock, Globe, Loader2, Zap } from "lucide-react"
 import { getContests, Contest, getContestByCode } from "../lib/contests"
+import { UserHeader } from "../components/UserHeader"
 
 export default function ContestsPage() {
   const [contests, setContests] = useState<Contest[]>([])
@@ -101,6 +102,7 @@ export default function ContestsPage() {
             >
               Join Private
             </button>
+            <UserHeader />
             <Link
               href="/contests/create"
               className="flex items-center gap-2 px-5 py-2.5 bg-[#00FF00] text-black rounded-full text-sm font-semibold hover:bg-[#00DD00] transition-all hover:scale-105"

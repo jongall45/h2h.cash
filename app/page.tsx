@@ -15,6 +15,7 @@ import { Timer } from "./components/Timer"
 import { OpponentReveal } from "./components/OpponentReveal"
 
 import { MatchupCard } from "./components/ui/SpotlightCard"
+import { UserHeader } from "./components/UserHeader"
 
 // All 32 NFL team abbreviations for logos
 const NFL_TEAMS = [
@@ -400,15 +401,7 @@ export default function Home() {
         <div className="min-h-screen relative z-10">
           {/* Header */}
           <header style={{ position: 'fixed', top: 0, right: 0, left: 'auto', zIndex: 50, padding: '16px 24px' }}>
-            <Link 
-              href="/auth"
-              className="psl-glass-btn"
-              style={{ textDecoration: 'none' }}
-            >
-              <span className="dot"></span>
-              <span className="btn-text">Sign In</span>
-              <span className="arrow">→</span>
-            </Link>
+            <UserHeader />
           </header>
 
           {/* Main content - centered */}
