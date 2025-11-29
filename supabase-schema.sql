@@ -153,9 +153,16 @@ CREATE POLICY "Users can update own entries" ON entries FOR UPDATE USING (true);
 DELETE FROM contests;
 
 -- Single tournament: 50 entries, $25 entry fee, top 5 paid
+-- Game time: Sunday at 1:00 PM EST (main slate kickoff)
+-- This calculates the next Sunday from today and sets 1PM EST time
 INSERT INTO contests (name, type, entry_fee, max_entries, game_time, payout_structure, status, rake_percent)
 VALUES 
-  ('🏆 NFL Week 13 Tournament', 'public', 25, 50, NOW() + INTERVAL '1 day', 
+  ('🏆 NFL Week 13 Tournament', 'public', 25, 50, 
+   -- Next Sunday at 1PM EST:
+   -- 1. Get current date
+   -- 2. Add days to reach Sunday (day 0)
+   -- 3. Set to 1PM EST (18:00 UTC during standard time, 17:00 UTC during daylight saving)
+   (CURRENT_DATE + ((7 - EXTRACT(DOW FROM CURRENT_DATE)::int) % 7) * INTERVAL '1 day' + INTERVAL '18 hours')::timestamptz,
    '[{"place": "1st", "percent": 40}, {"place": "2nd", "percent": 25}, {"place": "3rd", "percent": 15}, {"place": "4th", "percent": 10}, {"place": "5th", "percent": 10}]'::jsonb,
    'open',
    10);

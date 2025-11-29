@@ -3,10 +3,11 @@
 import { useState, useEffect } from "react"
 import { useParams, useRouter } from "next/navigation"
 import Link from "next/link"
-import { Trophy, Users, Clock, ChevronLeft, Share2, Copy, Check, Zap, Target, Loader2, Crown, Medal, X, TrendingUp, TrendingDown } from "lucide-react"
+import { Trophy, Users, Clock, ChevronLeft, Share2, Copy, Check, Zap, Target, Loader2, Crown, Medal, X, TrendingUp, TrendingDown, Lock } from "lucide-react"
 import { getContest, Contest, ContestEntry, calculatePayouts, subscribeToContest, EntryPick } from "../../lib/contests"
 import { LivePickTracker } from "../../components/LivePickTracker"
 import { TrackedPick } from "../../lib/resolution"
+import { getCurrentUser } from "../../lib/auth"
 
 export default function ContestDetailPage() {
   const params = useParams()
@@ -16,6 +17,18 @@ export default function ContestDetailPage() {
   const [activeTab, setActiveTab] = useState<'leaderboard' | 'prizes' | 'entries'>('leaderboard')
   const [copied, setCopied] = useState(false)
   const [selectedEntry, setSelectedEntry] = useState<ContestEntry | null>(null)
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+
+  // Get current user for pick visibility
+  useEffect(() => {
+    const loadCurrentUser = async () => {
+      const { user } = await getCurrentUser()
+      if (user) {
+        setCurrentUserId(user.id)
+      }
+    }
+    loadCurrentUser()
+  }, [])
 
   useEffect(() => {
     const loadContest = async () => {
@@ -221,7 +234,7 @@ export default function ContestDetailPage() {
           </div>
         )}
 
-        {/* 2x Bonus Banner */}
+        {/* Multiplier Scoring Banner */}
         <div className="mb-8 p-1 rounded-2xl bg-gradient-to-r from-yellow-500/20 via-orange-500/20 to-yellow-500/20">
           <div className="bg-[#0a0a0a] rounded-xl p-4 flex items-center gap-4 relative overflow-hidden">
             <div className="absolute inset-0 bg-yellow-500/5 animate-pulse"></div>
@@ -229,8 +242,9 @@ export default function ContestDetailPage() {
               <Zap size={24} className="text-yellow-500 fill-yellow-500" />
             </div>
             <div className="z-10">
-              <h3 className="font-bold text-lg text-yellow-500">Perfect Lineup Bonus</h3>
-              <p className="text-sm text-white/60">Hit all 5 picks to trigger a <span className="text-white font-semibold">2x Multiplier</span> on your total points.</p>
+              <h3 className="font-bold text-lg text-yellow-500">Hits = Multiplier!</h3>
+              <p className="text-sm text-white/60">Your multiplier equals your hits: <span className="text-white font-semibold">5x • 4x • 3x • 2x • 1x</span></p>
+              <p className="text-xs text-white/40 mt-1">0 hits = 0 points. Every hit matters!</p>
             </div>
           </div>
         </div>
@@ -274,13 +288,18 @@ export default function ContestDetailPage() {
                     // For pending games, show 0 points (potential points shown separately)
                     const displayPoints = gamesStarted ? entry.totalPoints : 0
                     
+                    // Check if this is the current user's entry
+                    const isOwnEntry = currentUserId && entry.oduserId === currentUserId
+                    // Can view picks if: it's your own entry OR contest is completed
+                    const canViewPicks = isOwnEntry || isCompleted
+                    
                     return (
                       <div 
                         key={entry.id} 
-                        onClick={() => setSelectedEntry(entry)}
+                        onClick={() => canViewPicks ? setSelectedEntry(entry) : setSelectedEntry({ ...entry, _picksHidden: true } as any)}
                         className={`grid grid-cols-12 gap-4 px-6 py-4 items-center transition-colors cursor-pointer hover:bg-white/[0.05] ${
                           entry.isPerfect ? 'bg-yellow-500/5' : ''
-                        }`}
+                        } ${isOwnEntry ? 'border-l-2 border-[#00FF00]' : ''}`}
                       >
                         <div className="col-span-1 font-medium text-white/50">
                           {isTop3 ? (
@@ -300,9 +319,15 @@ export default function ContestDetailPage() {
                               <span className="text-[10px] text-[#00FF00] font-medium md:hidden">Winning ${prize}</span>
                             )}
                           </div>
-                          {entry.isPerfect && (
-                            <span className="px-1.5 py-0.5 bg-yellow-500/20 text-yellow-500 text-[10px] font-bold rounded uppercase tracking-wide border border-yellow-500/20">
-                              2X
+                          {gamesStarted && entry.hitsCount > 0 && (
+                            <span className={`px-1.5 py-0.5 text-[10px] font-bold rounded uppercase tracking-wide border ${
+                              entry.hitsCount === 5 
+                                ? 'bg-yellow-500/20 text-yellow-500 border-yellow-500/20' 
+                                : entry.hitsCount >= 3 
+                                  ? 'bg-[#00FF00]/20 text-[#00FF00] border-[#00FF00]/20'
+                                  : 'bg-white/10 text-white/60 border-white/10'
+                            }`}>
+                              {entry.hitsCount}X
                             </span>
                           )}
                         </div>
@@ -351,7 +376,11 @@ export default function ContestDetailPage() {
               {/* Click hint */}
               {contest.entries.length > 0 && (
                 <div className="px-6 py-3 border-t border-white/5 text-center">
-                  <span className="text-xs text-white/30">Click on a player to view their picks</span>
+                  <span className="text-xs text-white/30">
+                    {isCompleted 
+                      ? 'Click on a player to view their picks'
+                      : 'Click on your entry to view picks. Other picks hidden until contest ends.'}
+                  </span>
                 </div>
               )}
             </div>
@@ -414,70 +443,98 @@ export default function ContestDetailPage() {
       </main>
 
       {/* Entry Detail Modal */}
-      {selectedEntry && (
-        <div 
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
-          onClick={() => setSelectedEntry(null)}
-        >
+      {selectedEntry && (() => {
+        const picksHidden = (selectedEntry as any)._picksHidden === true
+        const isOwnEntry = currentUserId && selectedEntry.oduserId === currentUserId
+        
+        return (
           <div 
-            className="w-full max-w-lg bg-[#111] border border-white/10 rounded-3xl overflow-hidden shadow-2xl"
-            onClick={e => e.stopPropagation()}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
+            onClick={() => setSelectedEntry(null)}
           >
-            {/* Modal Header */}
-            <div className="flex items-center justify-between p-4 border-b border-white/10">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-white/10 to-transparent border border-white/10 flex items-center justify-center text-sm font-bold text-white/70">
-                  {selectedEntry.username.charAt(0)}
-                </div>
-                <div>
-                  <div className="font-bold text-white">{selectedEntry.username}</div>
-                  <div className="text-xs text-white/40">
-                    {selectedEntry.hitsCount}/5 Hits • {selectedEntry.totalPoints.toFixed(2)} pts
-                    {selectedEntry.isPerfect && <span className="text-yellow-500 ml-1">🔥 2x</span>}
+            <div 
+              className="w-full max-w-lg bg-[#111] border border-white/10 rounded-3xl overflow-hidden shadow-2xl"
+              onClick={e => e.stopPropagation()}
+            >
+              {/* Modal Header */}
+              <div className="flex items-center justify-between p-4 border-b border-white/10">
+                <div className="flex items-center gap-3">
+                  <div className={`w-10 h-10 rounded-full bg-gradient-to-br from-white/10 to-transparent border flex items-center justify-center text-sm font-bold text-white/70 ${
+                    isOwnEntry ? 'border-[#00FF00]' : 'border-white/10'
+                  }`}>
+                    {selectedEntry.username.charAt(0)}
                   </div>
-                </div>
-              </div>
-              <button 
-                onClick={() => setSelectedEntry(null)}
-                className="p-2 hover:bg-white/10 rounded-full transition-colors"
-              >
-                <X size={20} className="text-white/60" />
-              </button>
-            </div>
-
-            {/* Picks List */}
-            <div className="p-4 max-h-[60vh] overflow-y-auto">
-              <div className="text-xs text-white/40 uppercase tracking-wider mb-3">Lineup</div>
-              <div className="space-y-3">
-                {selectedEntry.picks.map((pick, index) => (
-                  <PickCard key={index} pick={pick} index={index + 1} gamesStarted={gamesStarted} />
-                ))}
-              </div>
-            </div>
-
-            {/* Modal Footer */}
-            <div className="p-4 border-t border-white/10 bg-black/20">
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="text-xs text-white/40">Total Points</div>
-                  <div className="text-2xl font-bold text-white" style={{ fontVariantNumeric: 'tabular-nums' }}>
-                    {gamesStarted ? selectedEntry.totalPoints.toFixed(2) : '0.00'}
-                    {selectedEntry.isPerfect && <span className="text-yellow-500 text-lg ml-1">🔥</span>}
-                  </div>
-                </div>
-                {!gamesStarted && (
-                  <div className="text-right">
-                    <div className="text-xs text-white/40">Potential</div>
-                    <div className="text-lg font-medium text-white/50" style={{ fontVariantNumeric: 'tabular-nums' }}>
-                      {selectedEntry.totalPoints.toFixed(2)} pts
+                  <div>
+                    <div className="font-bold text-white flex items-center gap-2">
+                      {selectedEntry.username}
+                      {isOwnEntry && <span className="text-[10px] text-[#00FF00] bg-[#00FF00]/10 px-1.5 py-0.5 rounded">YOU</span>}
+                    </div>
+                    <div className="text-xs text-white/40">
+                      {selectedEntry.hitsCount}/5 Hits • {selectedEntry.totalPoints.toFixed(2)} pts
+                      {selectedEntry.hitsCount > 0 && gamesStarted && (
+                        <span className="text-yellow-500 ml-1">({selectedEntry.hitsCount}x multiplier)</span>
+                      )}
                     </div>
                   </div>
-                )}
+                </div>
+                <button 
+                  onClick={() => setSelectedEntry(null)}
+                  className="p-2 hover:bg-white/10 rounded-full transition-colors"
+                >
+                  <X size={20} className="text-white/60" />
+                </button>
+              </div>
+
+              {/* Picks List or Hidden Message */}
+              {picksHidden ? (
+                <div className="p-8 text-center">
+                  <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-white/5 flex items-center justify-center">
+                    <Lock size={32} className="text-white/30" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-white/80 mb-2">Picks Hidden</h3>
+                  <p className="text-sm text-white/40 max-w-xs mx-auto">
+                    Other players' picks are hidden until the contest ends. This prevents copying strategies mid-tournament.
+                  </p>
+                </div>
+              ) : (
+                <div className="p-4 max-h-[60vh] overflow-y-auto">
+                  <div className="text-xs text-white/40 uppercase tracking-wider mb-3">
+                    {isOwnEntry ? 'Your Lineup' : 'Lineup'}
+                  </div>
+                  <div className="space-y-3">
+                    {selectedEntry.picks.map((pick, index) => (
+                      <PickCard key={index} pick={pick} index={index + 1} gamesStarted={gamesStarted} />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Modal Footer */}
+              <div className="p-4 border-t border-white/10 bg-black/20">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="text-xs text-white/40">Total Points</div>
+                    <div className="text-2xl font-bold text-white" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                      {gamesStarted ? selectedEntry.totalPoints.toFixed(2) : '0.00'}
+                      {selectedEntry.hitsCount > 0 && gamesStarted && (
+                        <span className="text-yellow-500 text-sm ml-2">({selectedEntry.hitsCount}x)</span>
+                      )}
+                    </div>
+                  </div>
+                  {!gamesStarted && (
+                    <div className="text-right">
+                      <div className="text-xs text-white/40">Base Score</div>
+                      <div className="text-lg font-medium text-white/50" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                        {selectedEntry.totalPoints.toFixed(2)} pts
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        )
+      })()}
     </div>
   )
 }

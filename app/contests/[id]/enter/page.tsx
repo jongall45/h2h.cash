@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation"
 import Link from "next/link"
 import { ChevronLeft, Check, Zap, Loader2, Trophy, ArrowRight, X, ArrowLeft } from "lucide-react"
 import { getContest, Contest, submitEntry, EntryPick } from "../../../lib/contests"
-import { getSchedule, getGameProps } from "../../../actions/getOdds"
+import { getMainSlateSchedule, getGameProps } from "../../../actions/getOdds"
 import { getTeamAbbr, getPlayerId, getPlayerHeadshotUrl } from "../../../lib/espn"
 import { getCurrentUser } from "../../../lib/auth"
 import { BettingCard } from "../../../components/BettingCard"
@@ -46,7 +46,9 @@ export default function ContestEntryPage() {
         const c = await getContest(params.id as string)
         setContest(c)
         
-        const games = await getSchedule()
+        // Only get main slate games (1PM & 4PM EST Sunday games)
+        // Excludes SNF, MNF, TNF
+        const games = await getMainSlateSchedule()
         setSchedule(games)
         setStep('select_game')
         setLoading(false)
@@ -185,7 +187,9 @@ export default function ContestEntryPage() {
 
   // Calculate total with decimal precision
   const totalPoints = picks.reduce((sum, p) => sum + p.points, 0)
-  const potentialPerfectPoints = totalPoints * 2
+  // NEW MULTIPLIER SYSTEM: multiplier = number of hits
+  // Max potential = all 5 hit = 5x multiplier
+  const potentialMaxPoints = totalPoints * 5
 
   // Format points with 2 decimal places
   const formatPoints = (pts: number) => pts.toFixed(2)
@@ -477,16 +481,38 @@ export default function ContestEntryPage() {
 
               <div className="bg-black/20 p-4 border-t border-white/5">
                 <div className="flex justify-between items-center mb-2">
-                  <span className="text-white/50">Total Points</span>
+                  <span className="text-white/50">Base Points (before multiplier)</span>
                   <span className="font-bold text-xl" style={{ fontVariantNumeric: 'tabular-nums' }}>{formatPoints(totalPoints)}</span>
                 </div>
                 {picks.length === 5 && (
-                  <div className="flex justify-between items-center p-3 bg-yellow-500/10 rounded-xl border border-yellow-500/20">
-                    <div className="flex items-center gap-2 text-yellow-500 font-medium">
+                  <div className="p-3 bg-yellow-500/10 rounded-xl border border-yellow-500/20">
+                    <div className="flex items-center gap-2 text-yellow-500 font-medium mb-2">
                       <Zap size={16} />
-                      Perfect Lineup Bonus (2x)
+                      Multiplier = Hits!
                     </div>
-                    <span className="font-bold text-yellow-500" style={{ fontVariantNumeric: 'tabular-nums' }}>{formatPoints(potentialPerfectPoints)} pts</span>
+                    <div className="grid grid-cols-5 gap-1 text-xs text-center">
+                      <div className="bg-black/30 rounded p-1">
+                        <div className="text-yellow-500 font-bold">5x</div>
+                        <div className="text-white/40">5 hits</div>
+                      </div>
+                      <div className="bg-black/30 rounded p-1">
+                        <div className="text-white/70 font-bold">4x</div>
+                        <div className="text-white/40">4 hits</div>
+                      </div>
+                      <div className="bg-black/30 rounded p-1">
+                        <div className="text-white/70 font-bold">3x</div>
+                        <div className="text-white/40">3 hits</div>
+                      </div>
+                      <div className="bg-black/30 rounded p-1">
+                        <div className="text-white/70 font-bold">2x</div>
+                        <div className="text-white/40">2 hits</div>
+                      </div>
+                      <div className="bg-black/30 rounded p-1">
+                        <div className="text-white/70 font-bold">1x</div>
+                        <div className="text-white/40">1 hit</div>
+                      </div>
+                    </div>
+                    <div className="text-xs text-white/40 mt-2 text-center">0 hits = 0 points</div>
                   </div>
                 )}
               </div>
@@ -512,12 +538,12 @@ export default function ContestEntryPage() {
             <p className="text-white/40 mb-8 max-w-xs mx-auto">Your entry is live. Watch the leaderboard as games play out.</p>
             
             <div className="bg-white/5 border border-white/10 rounded-2xl p-6 mb-8 backdrop-blur-xl">
-              <div className="text-sm text-white/40 uppercase tracking-wider mb-1">Potential Score</div>
+              <div className="text-sm text-white/40 uppercase tracking-wider mb-1">Base Score</div>
               <div className="text-4xl font-bold text-white mb-2" style={{ fontVariantNumeric: 'tabular-nums' }}>{formatPoints(totalPoints)}</div>
               {picks.length === 5 && (
                 <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-yellow-500/10 text-yellow-500 text-sm font-medium border border-yellow-500/20">
                   <Zap size={12} />
-                  {formatPoints(potentialPerfectPoints)} pts max (2x bonus)
+                  {formatPoints(potentialMaxPoints)} pts max (5 hits = 5x)
                 </div>
               )}
             </div>

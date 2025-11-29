@@ -373,12 +373,18 @@ export function calculatePayouts(prizePool: number, entries: number, structure: 
   }))
 }
 
-// Calculate total points with 2x perfect bonus
-export function calculateTotalPoints(picks: EntryPick[]): { total: number; hits: number; isPerfect: boolean } {
+// Calculate total points with NEW MULTIPLIER SYSTEM
+// Multiplier = number of hits
+// 5/5 = 5x, 4/5 = 4x, 3/5 = 3x, 2/5 = 2x, 1/5 = 1x, 0/5 = 0 points
+export function calculateTotalPoints(picks: EntryPick[]): { total: number; hits: number; isPerfect: boolean; multiplier: number } {
   const hits = picks.filter(p => p.hit === true).length
   const basePoints = picks.reduce((sum, p) => sum + (p.hit === true ? p.points : 0), 0)
   const isPerfect = hits === 5
-  const total = isPerfect ? basePoints * 2 : basePoints
   
-  return { total, hits, isPerfect }
+  // NEW: Multiplier equals number of hits
+  // If 0 hits, total is 0
+  const multiplier = hits
+  const total = hits === 0 ? 0 : basePoints * multiplier
+  
+  return { total, hits, isPerfect, multiplier }
 }

@@ -144,14 +144,14 @@ export default function ContestsPage() {
           </div>
         </div>
 
-        {/* 2x Bonus Banner */}
+        {/* Multiplier Scoring Banner */}
         <div className="mb-6 p-4 bg-gradient-to-r from-yellow-500/10 to-orange-500/10 border border-yellow-500/20 rounded-xl flex items-center gap-3">
           <div className="w-10 h-10 rounded-full bg-yellow-500/20 flex items-center justify-center">
             <Zap size={20} className="text-yellow-500" />
           </div>
           <div>
-            <div className="font-semibold text-yellow-500">Perfect Lineup Bonus</div>
-            <div className="text-sm text-white/50">Hit all 5 picks = 2x your points</div>
+            <div className="font-semibold text-yellow-500">Hits = Multiplier!</div>
+            <div className="text-sm text-white/50">5/5 = 5x • 4/5 = 4x • 3/5 = 3x • 2/5 = 2x • 1/5 = 1x • 0/5 = 0 pts</div>
           </div>
         </div>
 

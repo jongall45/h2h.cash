@@ -81,10 +81,41 @@ export async function getSchedule() {
     id: game.id,
     home_team: game.home_team,
     away_team: game.away_team,
+    commence_time: game.commence_time,
     // Store team abbreviations for easier matching
     home_abbr: getTeamAbbr(game.home_team),
     away_abbr: getTeamAbbr(game.away_team)
   }));
+}
+
+// Get only main slate games (1PM EST and 4PM EST Sunday games)
+// Excludes primetime games: SNF, MNF, TNF
+export async function getMainSlateSchedule() {
+  const allGames = await getSchedule();
+  
+  return allGames.filter((game: any) => {
+    if (!game.commence_time) return false;
+    
+    const gameDate = new Date(game.commence_time);
+    const dayOfWeek = gameDate.getUTCDay(); // 0 = Sunday
+    const utcHour = gameDate.getUTCHours();
+    
+    // Only Sunday games (day 0)
+    if (dayOfWeek !== 0) return false;
+    
+    // 1PM EST = 18:00 UTC
+    // 4PM EST = 21:00 UTC (4:05 PM and 4:25 PM games typically start between 21:00-21:30 UTC)
+    // Exclude anything after 22:00 UTC (5PM EST+) which would be SNF
+    // Valid window: 18:00 - 21:30 UTC
+    if (utcHour >= 18 && utcHour < 22) {
+      // Additional check: exclude games that start after 5:30 PM EST (22:30 UTC)
+      const utcMinutes = gameDate.getUTCMinutes();
+      if (utcHour === 21 && utcMinutes > 30) return false;
+      return true;
+    }
+    
+    return false;
+  });
 }
 
 // 2. Get Props for a Specific Game - NOW WITH ALTERNATE LINES
