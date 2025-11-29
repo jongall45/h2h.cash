@@ -5,6 +5,9 @@ export const metadata: Metadata = {
   description: "Compete in NFL prop tournaments for cash prizes.",
 };
 
+// Force dynamic rendering for all contest pages
+export const dynamic = 'force-dynamic';
+
 export default function ContestsLayout({
   children,
 }: {
