@@ -243,7 +243,15 @@ export default function Home() {
     setStep('SPINNING')
   }
 
-  const handleSpinComplete = async () => {
+  const handleSpinComplete = async (preloadedProps?: any[]) => {
+    // If props were preloaded during countdown, use them directly
+    if (preloadedProps && preloadedProps.length > 0) {
+      setAvailableProps(preloadedProps)
+      setStep('SELECTION')
+      return
+    }
+    
+    // Otherwise, load props now (fallback)
     setStep('LOADING_PROPS')
     const props = await getGameProps(targetGame.id)
     
