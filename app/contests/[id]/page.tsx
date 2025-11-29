@@ -223,6 +223,17 @@ export default function ContestDetailPage() {
           </div>
         </div>
 
+        {/* Pre-Game Notice - picks are hidden */}
+        {!gamesStarted && contest.status === 'open' && (
+          <div className="mb-8 p-4 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex items-center gap-4">
+            <Lock size={20} className="text-blue-400 shrink-0" />
+            <div>
+              <div className="font-bold text-blue-400">Picks Hidden Until Kickoff</div>
+              <div className="text-sm text-white/50">Other players' picks and scores are hidden. All picks revealed once games start!</div>
+            </div>
+          </div>
+        )}
+
         {/* Live Scoring Notice */}
         {gamesStarted && !isCompleted && (
           <div className="mb-8 p-4 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center gap-4">
@@ -473,9 +484,15 @@ export default function ContestDetailPage() {
                       {isOwnEntry && <span className="text-[10px] text-[#00FF00] bg-[#00FF00]/10 px-1.5 py-0.5 rounded">YOU</span>}
                     </div>
                     <div className="text-xs text-white/40">
-                      {selectedEntry.hitsCount}/5 Hits • {selectedEntry.totalPoints.toFixed(2)} pts
-                      {selectedEntry.hitsCount > 0 && gamesStarted && (
-                        <span className="text-yellow-500 ml-1">({selectedEntry.hitsCount}x multiplier)</span>
+                      {picksHidden ? (
+                        'Points hidden until kickoff'
+                      ) : (
+                        <>
+                          {selectedEntry.hitsCount}/5 Hits • {selectedEntry.totalPoints.toFixed(2)} pts
+                          {selectedEntry.hitsCount > 0 && gamesStarted && (
+                            <span className="text-yellow-500 ml-1">({selectedEntry.hitsCount}x multiplier)</span>
+                          )}
+                        </>
                       )}
                     </div>
                   </div>
@@ -514,25 +531,31 @@ export default function ContestDetailPage() {
 
               {/* Modal Footer */}
               <div className="p-4 border-t border-white/10 bg-black/20">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="text-xs text-white/40">Total Points</div>
-                    <div className="text-2xl font-bold text-white" style={{ fontVariantNumeric: 'tabular-nums' }}>
-                      {gamesStarted ? selectedEntry.totalPoints.toFixed(2) : '0.00'}
-                      {selectedEntry.hitsCount > 0 && gamesStarted && (
-                        <span className="text-yellow-500 text-sm ml-2">({selectedEntry.hitsCount}x)</span>
-                      )}
-                    </div>
+                {picksHidden ? (
+                  <div className="text-center text-white/40 text-sm py-2">
+                    Scores revealed once games start
                   </div>
-                  {!gamesStarted && !picksHidden && (
-                    <div className="text-right">
-                      <div className="text-xs text-white/40">Base Score</div>
-                      <div className="text-lg font-medium text-white/50" style={{ fontVariantNumeric: 'tabular-nums' }}>
-                        {selectedEntry.totalPoints.toFixed(2)} pts
+                ) : (
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="text-xs text-white/40">Total Points</div>
+                      <div className="text-2xl font-bold text-white" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                        {gamesStarted ? selectedEntry.totalPoints.toFixed(2) : '0.00'}
+                        {selectedEntry.hitsCount > 0 && gamesStarted && (
+                          <span className="text-yellow-500 text-sm ml-2">({selectedEntry.hitsCount}x)</span>
+                        )}
                       </div>
                     </div>
-                  )}
-                </div>
+                    {!gamesStarted && (
+                      <div className="text-right">
+                        <div className="text-xs text-white/40">Base Score</div>
+                        <div className="text-lg font-medium text-white/50" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                          {selectedEntry.totalPoints.toFixed(2)} pts
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           </div>
