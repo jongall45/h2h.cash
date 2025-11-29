@@ -69,6 +69,13 @@ export async function signUpWithEmail(email: string, password: string, username:
 export async function signInWithEmail(email: string, password: string): Promise<{ user: User | null; error: string | null }> {
   try {
     console.log('Attempting sign in for:', email)
+    console.log('Supabase URL:', process.env.NEXT_PUBLIC_SUPABASE_URL ? 'Set' : 'NOT SET')
+    
+    // Check if Supabase is configured
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+      console.error('Supabase not configured!')
+      return { user: null, error: 'Authentication service not configured. Please contact support.' }
+    }
     
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
