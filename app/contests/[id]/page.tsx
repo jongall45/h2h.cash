@@ -431,8 +431,8 @@ export default function ContestDetailPage() {
                     const isInMoney = isCompleted && (index + 1) <= paidPositions
                     const prize = isInMoney ? Math.floor(contest.prizePool / paidPositions) : 0
                     
-                    // Can view picks only once games start (full transparency)
-                    const canViewPicks = canRevealAllData
+                    // Can view picks: YOUR OWN anytime, others only once games start
+                    const canViewPicks = isOwnEntry || canRevealAllData
                     
                     return (
                       <div 
@@ -497,9 +497,16 @@ export default function ContestDetailPage() {
                             }`}>
                               {displayHits}/5
                             </div>
-                          ) : (
-                            <div className="inline-flex items-center justify-center px-2 py-1 rounded-md text-xs font-bold bg-white/5 text-white/30">
+                          ) : isOwnEntry ? (
+                            // Show YOUR potential hits (0 pre-game since no games played)
+                            <div className="inline-flex items-center justify-center px-2 py-1 rounded-md text-xs font-bold bg-[#00FF00]/10 text-[#00FF00]/70">
                               0/5
+                            </div>
+                          ) : (
+                            // Hide opponents
+                            <div className="inline-flex items-center justify-center px-2 py-1 rounded-md text-xs font-bold bg-white/5 text-white/30">
+                              <Lock size={10} className="mr-1" />
+                              —
                             </div>
                           )}
                         </div>
@@ -519,9 +526,20 @@ export default function ContestDetailPage() {
                                 </div>
                               )}
                             </>
+                          ) : isOwnEntry ? (
+                            // Show YOUR potential points pre-game
+                            <>
+                              <div className="text-lg font-bold text-[#00FF00]" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                                {entry.totalPoints.toFixed(2)}
+                              </div>
+                              <div className="text-[10px] text-[#00FF00]/50">
+                                potential
+                              </div>
+                            </>
                           ) : (
-                            <div className="text-lg font-bold text-white/30" style={{ fontVariantNumeric: 'tabular-nums' }}>
-                              0.00
+                            // Hide opponents
+                            <div className="text-lg font-bold text-white/20" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                              —
                             </div>
                           )}
                         </div>
@@ -589,28 +607,96 @@ export default function ContestDetailPage() {
             </div>
           )}
 
-          {activeTab === 'entries' && (
-            <div className="bg-white/5 border border-white/5 rounded-3xl p-8 text-center backdrop-blur-sm">
-              <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-white/5 flex items-center justify-center">
-                <Users size={40} className="text-white/20" />
+          {activeTab === 'entries' && (() => {
+            // Find user's entries in this contest
+            const myEntries = contest.entries.filter(e => currentUserId && e.oduserId === currentUserId)
+            
+            if (myEntries.length === 0) {
+              return (
+                <div className="bg-white/5 border border-white/5 rounded-3xl p-8 text-center backdrop-blur-sm">
+                  <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-white/5 flex items-center justify-center">
+                    <Users size={40} className="text-white/20" />
+                  </div>
+                  <h3 className="text-xl font-bold mb-2">Your Entries</h3>
+                  <p className="text-white/40 mb-8 max-w-xs mx-auto">You haven't entered this contest yet. Draft your team to compete for cash prizes.</p>
+                  {contest.status === 'open' && (
+                    <button
+                      onClick={handleEnterContest}
+                      className="px-8 py-3 bg-[#00FF00] text-black font-bold rounded-xl hover:bg-[#00DD00] transition-all hover:scale-105 shadow-[0_0_20px_rgba(0,255,0,0.3)]"
+                    >
+                      Draft Lineup
+                    </button>
+                  )}
+                </div>
+              )
+            }
+            
+            return (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                    <Check size={20} className="text-[#00FF00]" />
+                    Your Entries ({myEntries.length})
+                  </h3>
+                </div>
+                
+                {myEntries.map((entry, idx) => (
+                  <div 
+                    key={entry.id}
+                    onClick={() => setSelectedEntry(entry)}
+                    className="bg-white/5 border border-[#00FF00]/20 rounded-2xl p-4 cursor-pointer hover:bg-white/10 transition-all"
+                  >
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-[#00FF00]/20 border border-[#00FF00]/30 flex items-center justify-center text-sm font-bold text-[#00FF00]">
+                          {entry.username.charAt(0)}
+                        </div>
+                        <div>
+                          <div className="font-bold text-white flex items-center gap-2">
+                            Entry #{idx + 1}
+                            <span className="text-[9px] bg-[#00FF00]/20 text-[#00FF00] px-1.5 py-0.5 rounded">SUBMITTED</span>
+                          </div>
+                          <div className="text-xs text-white/40">
+                            {new Date(entry.submittedAt).toLocaleString()}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-xl font-bold text-[#00FF00]" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                          {entry.totalPoints.toFixed(2)}
+                        </div>
+                        <div className="text-[10px] text-[#00FF00]/50">potential pts</div>
+                      </div>
+                    </div>
+                    
+                    {/* Mini pick preview */}
+                    <div className="flex flex-wrap gap-1">
+                      {entry.picks.slice(0, 5).map((pick, i) => (
+                        <div 
+                          key={i}
+                          className="text-[10px] bg-white/5 border border-white/10 rounded px-2 py-1 text-white/60"
+                        >
+                          {pick.player.split(' ').pop()} {pick.line}+
+                        </div>
+                      ))}
+                    </div>
+                    
+                    <div className="mt-3 text-xs text-white/30 text-center">
+                      Click to view full lineup →
+                    </div>
+                  </div>
+                ))}
               </div>
-              <h3 className="text-xl font-bold mb-2">Your Entries</h3>
-              <p className="text-white/40 mb-8 max-w-xs mx-auto">You haven't entered this contest yet. Draft your team to compete for cash prizes.</p>
-              <button
-                onClick={handleEnterContest}
-                className="px-8 py-3 bg-[#00FF00] text-black font-bold rounded-xl hover:bg-[#00DD00] transition-all hover:scale-105 shadow-[0_0_20px_rgba(0,255,0,0.3)]"
-              >
-                Draft Lineup
-              </button>
-            </div>
-          )}
+            )
+          })()}
         </div>
       </main>
 
       {/* Entry Detail Modal */}
       {selectedEntry && (() => {
-        const picksHidden = (selectedEntry as any)._picksHidden === true
         const isOwnEntry = currentUserId && selectedEntry.oduserId === currentUserId
+        // Your own picks are NEVER hidden, opponents hidden until games start
+        const picksHidden = !isOwnEntry && (selectedEntry as any)._picksHidden === true
         const entryResults = livePickResults.get(selectedEntry.id)
         
         return (
@@ -637,14 +723,19 @@ export default function ContestDetailPage() {
                     </div>
                     <div className="text-xs text-white/40">
                       {picksHidden ? (
-                        'Picks hidden until contest concludes'
-                      ) : (
+                        'Picks hidden until games begin'
+                      ) : canRevealAllData ? (
                         <>
                           {selectedEntry.hitsCount}/5 Hits • {selectedEntry.totalPoints.toFixed(2)} pts
-                          {selectedEntry.hitsCount > 0 && (isLive || canRevealAllData) && (
+                          {selectedEntry.hitsCount > 0 && (
                             <span className="text-yellow-500 ml-1">({selectedEntry.hitsCount}x multiplier)</span>
                           )}
                         </>
+                      ) : (
+                        // Pre-game: show potential points for own entry
+                        <span className="text-[#00FF00]">
+                          {selectedEntry.totalPoints.toFixed(2)} potential pts • Awaiting kickoff
+                        </span>
                       )}
                     </div>
                   </div>
@@ -701,7 +792,24 @@ export default function ContestDetailPage() {
               <div className="p-4 border-t border-white/10 bg-black/20">
                 {picksHidden ? (
                   <div className="text-center text-white/40 text-sm py-2">
-                    All picks revealed at kickoff with live scoring
+                    Opponent picks revealed at kickoff with live scoring
+                  </div>
+                ) : !canRevealAllData && isOwnEntry ? (
+                  // Pre-game: show potential points for own entry
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="text-xs text-[#00FF00]/60">Potential Points</div>
+                      <div className="text-2xl font-bold text-[#00FF00]" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                        {selectedEntry.totalPoints.toFixed(2)}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-xs text-white/40">Status</div>
+                      <div className="text-sm font-medium text-blue-400 flex items-center gap-1">
+                        <Lock size={12} />
+                        Awaiting Kickoff
+                      </div>
+                    </div>
                   </div>
                 ) : (
                   <div className="flex items-center justify-between">
