@@ -264,24 +264,13 @@ export default function AuthPage() {
               </form>
             )}
 
-            {/* Divider */}
+            {/* Note about other sign-in methods */}
             {(mode === 'signin' || mode === 'signup') && (
-              <>
-                <div className="flex items-center gap-4 my-6">
-                  <div className="flex-1 h-px bg-white/10"></div>
-                  <span className="text-white/30 text-sm">or</span>
-                  <div className="flex-1 h-px bg-white/10"></div>
-                </div>
-
-                {/* Phone Sign In Button */}
-                <button
-                  onClick={() => setMode('phone')}
-                  className="w-full py-3 bg-white/5 border border-white/10 rounded-xl text-white/80 hover:bg-white/10 transition-all flex items-center justify-center gap-2"
-                >
-                  <Phone size={18} />
-                  Continue with Phone
-                </button>
-              </>
+              <div className="mt-6 p-3 bg-white/5 rounded-xl border border-white/10">
+                <p className="text-white/40 text-xs text-center">
+                  📧 Email sign-in is the fastest way to get started. Phone authentication coming soon!
+                </p>
+              </div>
             )}
 
             {/* Toggle Sign In / Sign Up */}
@@ -300,14 +289,19 @@ export default function AuthPage() {
             )}
 
             {/* Back to Email from Phone */}
-            {mode === 'phone' && (
-              <button
-                onClick={() => setMode('signin')}
-                className="w-full mt-4 py-3 text-white/50 hover:text-white transition-colors text-sm flex items-center justify-center gap-2"
-              >
-                <Mail size={16} />
-                Sign in with email instead
-              </button>
+            {(mode === 'phone' || mode === 'verify') && (
+              <div className="mt-4 p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-xl">
+                <p className="text-yellow-500 text-xs text-center mb-2">
+                  ⚠️ Phone authentication requires Twilio setup
+                </p>
+                <button
+                  onClick={() => setMode('signin')}
+                  className="w-full py-2 text-white/70 hover:text-white transition-colors text-sm flex items-center justify-center gap-2"
+                >
+                  <Mail size={16} />
+                  Use email instead (recommended)
+                </button>
+              </div>
             )}
           </div>
 
