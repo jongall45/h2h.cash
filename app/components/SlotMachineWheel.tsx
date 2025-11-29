@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { getTeamLogoUrl } from "../lib/espn"
+import { getGameProps } from "../actions/getOdds"
 
 interface Game {
   id: string
@@ -12,7 +13,7 @@ interface Game {
 interface SlotMachineWheelProps {
   games: Game[]
   targetGame: Game
-  onComplete: () => void
+  onComplete: (props?: any[]) => void
 }
 
 // Team logo component with fixed size
@@ -49,6 +50,10 @@ export function SlotMachineWheel({ games, targetGame, onComplete }: SlotMachineW
   const [displayIndex, setDisplayIndex] = useState(0)
   const [phase, setPhase] = useState<'spinning' | 'slowing' | 'locked'>('spinning')
   const [blur, setBlur] = useState(2)
+  const [countdown, setCountdown] = useState(3)
+  const [loadedProps, setLoadedProps] = useState<any[] | null>(null)
+  const [countdownComplete, setCountdownComplete] = useState(false)
+  const [hasCompleted, setHasCompleted] = useState(false)
   
   useEffect(() => {
     if (!games || games.length === 0 || !targetGame) return
@@ -84,10 +89,6 @@ export function SlotMachineWheel({ games, targetGame, onComplete }: SlotMachineW
         setDisplayIndex(targetIndex !== -1 ? targetIndex : 0)
         setPhase('locked')
         setBlur(0)
-        
-        setTimeout(() => {
-          onComplete()
-        }, 400)  // Quick 400ms pause then move on
       }
     }
 
@@ -98,6 +99,67 @@ export function SlotMachineWheel({ games, targetGame, onComplete }: SlotMachineW
       clearTimeout(timeoutId)
     }
   }, [games, targetGame, onComplete])
+
+  // Load props in background when game is locked
+  useEffect(() => {
+    if (phase !== 'locked' || !targetGame) return
+    
+    // Reset props when starting a new game
+    setLoadedProps(null)
+    
+    // Start fetching props immediately when countdown begins
+    console.log('[SlotMachineWheel] Starting to fetch props for game:', targetGame.id)
+    getGameProps(targetGame.id).then(props => {
+      console.log('[SlotMachineWheel] Props loaded:', props?.length || 0, 'props')
+      setLoadedProps(props || [])
+    }).catch(err => {
+      console.error('[SlotMachineWheel] Error loading props during countdown:', err)
+      setLoadedProps([])
+    })
+  }, [phase, targetGame])
+
+  // Countdown timer after game is locked
+  useEffect(() => {
+    if (phase !== 'locked') return
+    
+    setCountdown(3)
+    setCountdownComplete(false)
+    setHasCompleted(false) // Reset completion flag
+    
+    const countdownInterval = setInterval(() => {
+      setCountdown(prev => {
+        if (prev <= 1) {
+          clearInterval(countdownInterval)
+          setTimeout(() => {
+            // Mark countdown as complete
+            setCountdownComplete(true)
+          }, 1000) // Complete after showing "1" for 1 second
+          return 0
+        }
+        return prev - 1
+      })
+    }, 1000)
+    
+    return () => {
+      clearInterval(countdownInterval)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase])
+
+  // Proceed when BOTH countdown is complete AND props are loaded
+  useEffect(() => {
+    if (hasCompleted) {
+      console.log('[SlotMachineWheel] Already completed, skipping')
+      return // Already completed, don't call again
+    }
+    if (!countdownComplete) return
+    if (loadedProps === null) return // Props still loading
+    
+    // Both ready - proceed!
+    console.log('[SlotMachineWheel] Calling onComplete with', loadedProps.length, 'props')
+    setHasCompleted(true)
+    onComplete(loadedProps.length > 0 ? loadedProps : undefined)
+  }, [countdownComplete, loadedProps, onComplete, hasCompleted])
 
   // Show loading if no games
   if (!games || games.length === 0 || !targetGame) {
@@ -189,6 +251,41 @@ export function SlotMachineWheel({ games, targetGame, onComplete }: SlotMachineW
               </span>
             </div>
           </div>
+          
+          {/* Countdown Display */}
+          {phase === 'locked' && (
+            <div style={{
+              marginTop: '20px',
+              padding: '16px',
+              backgroundColor: '#111',
+              borderRadius: '12px',
+              border: '2px solid #00FF00',
+              textAlign: 'center',
+              boxShadow: '0 0 20px rgba(0, 255, 0, 0.2)'
+            }}>
+              <div style={{
+                fontSize: '14px',
+                color: '#00FF00',
+                fontWeight: 600,
+                textTransform: 'uppercase',
+                letterSpacing: '0.15em',
+                marginBottom: countdown > 0 ? '8px' : '0px'
+              }}>
+                {countdownComplete && loadedProps === null ? 'Finalizing Props...' : 'Get Ready to Pick'}
+              </div>
+              {countdown > 0 && (
+                <div style={{
+                  fontSize: '48px',
+                  fontWeight: 900,
+                  color: '#00FF00',
+                  textShadow: '0 0 20px rgba(0, 255, 0, 0.5)',
+                  lineHeight: 1
+                }}>
+                  {countdown}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Progress Section */}
@@ -222,7 +319,13 @@ export function SlotMachineWheel({ games, targetGame, onComplete }: SlotMachineW
             letterSpacing: '0.1em',
             color: phase === 'locked' ? '#00FF00' : '#555'
           }}>
-            {phase === 'locked' ? 'Loading Props...' : 'Scanning NFL Games...'}
+            {phase === 'locked' && countdown === 0 && loadedProps === null
+              ? 'Loading Props...'
+              : phase === 'locked' && countdown === 0
+                ? 'Props Ready!'
+                : phase === 'locked' 
+                  ? 'Match Locked In'
+                  : 'Scanning NFL Games...'}
           </div>
         </div>
       </div>
