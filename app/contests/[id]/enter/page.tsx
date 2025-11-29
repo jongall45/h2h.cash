@@ -86,6 +86,12 @@ export default function ContestEntryPage() {
   }
 
   const handleLockIn = (points: number, finalLine: number, riskLabel: string) => {
+    // Don't allow more than 5 picks
+    if (picks.length >= 5) {
+      setStep('review')
+      return
+    }
+    
     const newPick: Pick = {
       player: selectedProp.player,
       stat: selectedProp.stat,
@@ -99,13 +105,18 @@ export default function ContestEntryPage() {
     const updatedPicks = [...picks, newPick]
     setPicks(updatedPicks)
     
-    // Clear selection and go back to matchup selection (not props)
+    // Clear selection
     setSelectedProp(null)
     setSelectedGame(null)
     setAvailableProps([])
     
-    // Always return to matchup selection to allow picking from different games
-    setStep('select_game')
+    // If we now have 5 picks, go to review automatically
+    if (updatedPicks.length >= 5) {
+      setStep('review')
+    } else {
+      // Otherwise return to matchup selection
+      setStep('select_game')
+    }
   }
 
   // Go back to matchup selection from props
@@ -291,13 +302,20 @@ export default function ContestEntryPage() {
               ))}
             </div>
             
+            {/* Lineup Full Message */}
+            {picks.length >= 5 && (
+              <div className="mt-3 p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-xl text-center">
+                <span className="text-yellow-500 text-sm font-medium">🎯 Lineup Full! Ready to submit.</span>
+              </div>
+            )}
+            
             {/* Submit Button - visible when we have picks */}
             {picks.length >= 1 && (
               <button
                 onClick={handleGoToReview}
                 className="w-full mt-4 py-3 bg-[#00FF00] text-black font-bold rounded-xl hover:bg-[#00DD00] transition-all flex items-center justify-center gap-2"
               >
-                {picks.length >= 5 ? 'Review & Submit Lineup' : `Submit ${picks.length} Pick${picks.length > 1 ? 's' : ''}`}
+                {picks.length >= 5 ? 'Review & Submit Lineup' : `Review ${picks.length} Pick${picks.length > 1 ? 's' : ''}`}
                 <ArrowRight size={16} />
               </button>
             )}
@@ -311,47 +329,65 @@ export default function ContestEntryPage() {
               <Trophy size={20} className="text-[#00FF00]" />
               Select Matchup
             </h2>
-            <p className="text-white/40 text-sm mb-6">Pick props from any game. You can mix and match!</p>
+            <p className="text-white/40 text-sm mb-6">
+              {picks.length >= 5 
+                ? "Lineup full! Review and submit your picks above." 
+                : `Pick props from any game. ${5 - picks.length} pick${5 - picks.length !== 1 ? 's' : ''} remaining.`}
+            </p>
             
-            <div className="space-y-3">
-              {schedule.map(game => (
+            {/* If lineup is full, don't show games - prompt to review */}
+            {picks.length >= 5 ? (
+              <div className="text-center py-8 bg-white/5 rounded-2xl border border-white/10">
+                <div className="text-4xl mb-3">🎯</div>
+                <p className="text-white/60 mb-4">Your lineup is complete!</p>
                 <button
-                  key={game.id}
-                  onClick={() => handleSelectGame(game)}
-                  className="w-full group bg-white/5 hover:bg-white/10 border border-white/5 hover:border-white/20 rounded-2xl p-4 transition-all"
+                  onClick={handleGoToReview}
+                  className="px-6 py-3 bg-[#00FF00] text-black font-bold rounded-xl hover:bg-[#00DD00] transition-all"
                 >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      <div className="flex items-center -space-x-2">
-                        <img 
-                          src={`https://a.espncdn.com/i/teamlogos/nfl/500/${game.away_abbr?.toLowerCase()}.png`}
-                          alt={game.away_team}
-                          className="w-10 h-10 object-contain relative z-10"
-                        />
-                        <img 
-                          src={`https://a.espncdn.com/i/teamlogos/nfl/500/${game.home_abbr?.toLowerCase()}.png`}
-                          alt={game.home_team}
-                          className="w-10 h-10 object-contain"
-                        />
-                      </div>
-                      <div className="text-left">
-                        <div className="font-bold text-white group-hover:text-[#00FF00] transition-colors">
-                          {game.away_team.split(' ').pop()} @ {game.home_team.split(' ').pop()}
-                        </div>
-                        <div className="text-xs text-white/40">Tap to view props</div>
-                      </div>
-                    </div>
-                    <ArrowRight size={20} className="text-white/20 group-hover:text-[#00FF00] group-hover:translate-x-1 transition-all" />
-                  </div>
+                  Review & Submit Lineup
                 </button>
-              ))}
-              
-              {schedule.length === 0 && (
-                <div className="text-center py-12 bg-white/5 rounded-2xl border border-white/5">
-                  <p className="text-white/40">No games available right now.</p>
-                </div>
-              )}
-            </div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {schedule.map(game => (
+                  <button
+                    key={game.id}
+                    onClick={() => handleSelectGame(game)}
+                    className="w-full group bg-white/5 hover:bg-white/10 border border-white/5 hover:border-white/20 rounded-2xl p-4 transition-all"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-4">
+                        <div className="flex items-center -space-x-2">
+                          <img 
+                            src={`https://a.espncdn.com/i/teamlogos/nfl/500/${game.away_abbr?.toLowerCase()}.png`}
+                            alt={game.away_team}
+                            className="w-10 h-10 object-contain relative z-10"
+                          />
+                          <img 
+                            src={`https://a.espncdn.com/i/teamlogos/nfl/500/${game.home_abbr?.toLowerCase()}.png`}
+                            alt={game.home_team}
+                            className="w-10 h-10 object-contain"
+                          />
+                        </div>
+                        <div className="text-left">
+                          <div className="font-bold text-white group-hover:text-[#00FF00] transition-colors">
+                            {game.away_team.split(' ').pop()} @ {game.home_team.split(' ').pop()}
+                          </div>
+                          <div className="text-xs text-white/40">Tap to view props</div>
+                        </div>
+                      </div>
+                      <ArrowRight size={20} className="text-white/20 group-hover:text-[#00FF00] group-hover:translate-x-1 transition-all" />
+                    </div>
+                  </button>
+                ))}
+                
+                {schedule.length === 0 && (
+                  <div className="text-center py-12 bg-white/5 rounded-2xl border border-white/5">
+                    <p className="text-white/40">No games available right now.</p>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 
