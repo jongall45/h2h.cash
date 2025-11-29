@@ -134,8 +134,12 @@ export default function ContestEntryPage() {
     setSubmitting(false)
   }
 
+  // Calculate total with decimal precision
   const totalPoints = picks.reduce((sum, p) => sum + p.points, 0)
   const potentialPerfectPoints = totalPoints * 2
+
+  // Format points with 2 decimal places
+  const formatPoints = (pts: number) => pts.toFixed(2)
 
   const getPlayersByTeam = () => {
     if (!selectedGame || !availableProps.length) return { homePlayers: [], awayPlayers: [] }
@@ -333,14 +337,14 @@ export default function ContestEntryPage() {
               <div className="bg-black/20 p-4 border-t border-white/5">
                 <div className="flex justify-between items-center mb-2">
                   <span className="text-white/50">Total Points</span>
-                  <span className="font-bold text-xl">{totalPoints}</span>
+                  <span className="font-bold text-xl" style={{ fontVariantNumeric: 'tabular-nums' }}>{formatPoints(totalPoints)}</span>
                 </div>
                 <div className="flex justify-between items-center p-3 bg-yellow-500/10 rounded-xl border border-yellow-500/20">
                   <div className="flex items-center gap-2 text-yellow-500 font-medium">
                     <Zap size={16} />
-                    Perfect Lineup Bonus
+                    Perfect Lineup Bonus (2x)
                   </div>
-                  <span className="font-bold text-yellow-500">{potentialPerfectPoints} pts</span>
+                  <span className="font-bold text-yellow-500" style={{ fontVariantNumeric: 'tabular-nums' }}>{formatPoints(potentialPerfectPoints)} pts</span>
                 </div>
               </div>
             </div>
@@ -366,10 +370,10 @@ export default function ContestEntryPage() {
             
             <div className="bg-white/5 border border-white/10 rounded-2xl p-6 mb-8 backdrop-blur-xl">
               <div className="text-sm text-white/40 uppercase tracking-wider mb-1">Potential Score</div>
-              <div className="text-4xl font-bold text-white mb-2">{totalPoints}</div>
+              <div className="text-4xl font-bold text-white mb-2" style={{ fontVariantNumeric: 'tabular-nums' }}>{formatPoints(totalPoints)}</div>
               <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-yellow-500/10 text-yellow-500 text-sm font-medium border border-yellow-500/20">
                 <Zap size={12} />
-                {potentialPerfectPoints} pts max
+                {formatPoints(potentialPerfectPoints)} pts max (2x bonus)
               </div>
             </div>
 
@@ -438,8 +442,8 @@ function PickRow({ pick, index }: { pick: Pick; index: number }) {
       </div>
       
       <div className="text-right">
-        <div className="text-lg font-bold" style={{ color: getRiskColor(pick.riskLabel) }}>
-          {pick.points}
+        <div className="text-lg font-bold" style={{ color: getRiskColor(pick.riskLabel), fontVariantNumeric: 'tabular-nums' }}>
+          {pick.points.toFixed(2)}
         </div>
         <div className="text-[9px] font-bold tracking-wider uppercase opacity-60" style={{ color: getRiskColor(pick.riskLabel) }}>{pick.riskLabel}</div>
       </div>

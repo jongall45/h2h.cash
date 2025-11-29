@@ -189,10 +189,11 @@ function SummaryPickRow({ pick, isYou }: { pick: any; isYou: boolean }) {
       <div style={{ 
         fontSize: '13px', 
         fontWeight: 600, 
-        color: points > 5 ? '#00FF00' : points < 5 ? '#ef4444' : '#fff',
-        flexShrink: 0
+        color: points > 2 ? '#00FF00' : points < 1.5 ? '#ef4444' : '#fff',
+        flexShrink: 0,
+        fontVariantNumeric: 'tabular-nums'
       }}>
-        {points}
+        {typeof points === 'number' ? points.toFixed(2) : points}
       </div>
     </div>
   )
@@ -789,7 +790,7 @@ export default function Home() {
                       alignItems: 'center'
                     }}>
                       <div style={{ textAlign: 'center' }}>
-                        <div style={{ fontSize: '28px', fontWeight: 600, color: '#00FF00' }}>{yourTotal}</div>
+                        <div style={{ fontSize: '28px', fontWeight: 600, color: '#00FF00', fontVariantNumeric: 'tabular-nums' }}>{yourTotal.toFixed(2)}</div>
                         <div style={{ fontSize: '9px', color: '#00FF00', textTransform: 'uppercase', letterSpacing: '0.1em' }}>You</div>
                       </div>
                       <div style={{ textAlign: 'center' }}>
@@ -797,7 +798,7 @@ export default function Home() {
                         <div style={{ fontSize: '8px', color: '#555', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Payout</div>
                       </div>
                       <div style={{ textAlign: 'center' }}>
-                        <div style={{ fontSize: '28px', fontWeight: 600, color: '#ff6b35' }}>{theirTotal}</div>
+                        <div style={{ fontSize: '28px', fontWeight: 600, color: '#ff6b35', fontVariantNumeric: 'tabular-nums' }}>{theirTotal.toFixed(2)}</div>
                         <div style={{ fontSize: '9px', color: '#ff6b35', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Opp</div>
                       </div>
                     </div>
