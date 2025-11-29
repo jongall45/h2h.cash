@@ -151,7 +151,8 @@ export default function ContestsPage() {
           </div>
           <div>
             <div className="font-semibold text-yellow-500">Hits = Multiplier!</div>
-            <div className="text-sm text-white/50">5/5 = 5x • 4/5 = 4x • 3/5 = 3x • 2/5 = 2x • 1/5 = 1x • 0/5 = 0 pts</div>
+            <div className="text-sm text-white/50">Your multiplier equals your hits: <span className="text-white font-medium">5x • 4x • 3x • 2x • 1x</span></div>
+            <div className="text-xs text-white/30 mt-0.5">0 hits = 0 points. Every hit matters!</div>
           </div>
         </div>
 

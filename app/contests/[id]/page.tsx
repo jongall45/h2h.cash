@@ -290,8 +290,10 @@ export default function ContestDetailPage() {
                     
                     // Check if this is the current user's entry
                     const isOwnEntry = currentUserId && entry.oduserId === currentUserId
-                    // Can view picks if: it's your own entry OR contest is completed
-                    const canViewPicks = isOwnEntry || isCompleted
+                    // Can view picks if: it's your own entry OR games have started
+                    // Before games start: hide other players' picks to prevent copying
+                    // Once games start: reveal all picks
+                    const canViewPicks = isOwnEntry || gamesStarted
                     
                     return (
                       <div 
@@ -351,7 +353,8 @@ export default function ContestDetailPage() {
                           </div>
                           {!gamesStarted && (
                             <div className="text-[10px] text-white/30">
-                              {entry.totalPoints.toFixed(2)} potential
+                              {/* Only show potential points for your own entry before games start */}
+                              {isOwnEntry ? `${entry.totalPoints.toFixed(2)} potential` : '— hidden'}
                             </div>
                           )}
                           {isInMoney && displayPoints > 0 && (
@@ -377,9 +380,9 @@ export default function ContestDetailPage() {
               {contest.entries.length > 0 && (
                 <div className="px-6 py-3 border-t border-white/5 text-center">
                   <span className="text-xs text-white/30">
-                    {isCompleted 
+                    {gamesStarted 
                       ? 'Click on a player to view their picks'
-                      : 'Click on your entry to view picks. Other picks hidden until contest ends.'}
+                      : 'Click on your entry to view picks. Other picks revealed once games start.'}
                   </span>
                 </div>
               )}
@@ -493,7 +496,7 @@ export default function ContestDetailPage() {
                   </div>
                   <h3 className="text-lg font-semibold text-white/80 mb-2">Picks Hidden</h3>
                   <p className="text-sm text-white/40 max-w-xs mx-auto">
-                    Other players' picks are hidden until the contest ends. This prevents copying strategies mid-tournament.
+                    Other players' picks are hidden until games start. This prevents copying strategies before kickoff.
                   </p>
                 </div>
               ) : (
@@ -521,7 +524,7 @@ export default function ContestDetailPage() {
                       )}
                     </div>
                   </div>
-                  {!gamesStarted && (
+                  {!gamesStarted && !picksHidden && (
                     <div className="text-right">
                       <div className="text-xs text-white/40">Base Score</div>
                       <div className="text-lg font-medium text-white/50" style={{ fontVariantNumeric: 'tabular-nums' }}>
