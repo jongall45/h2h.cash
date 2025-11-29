@@ -11,8 +11,10 @@ export interface User {
 }
 
 // Sign up with email
-export async function signUpWithEmail(email: string, password: string, username: string): Promise<{ user: User | null; error: string | null }> {
+export async function signUpWithEmail(email: string, password: string, username: string): Promise<{ user: User | null; error: string | null; needsConfirmation?: boolean }> {
   try {
+    console.log('Starting signup for:', email, 'with username:', username)
+    
     // First create the auth user
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email,
@@ -25,12 +27,16 @@ export async function signUpWithEmail(email: string, password: string, username:
     })
 
     if (authError) {
+      console.error('Signup auth error:', authError)
       return { user: null, error: authError.message }
     }
 
     if (!authData.user) {
       return { user: null, error: 'Failed to create account' }
     }
+
+    console.log('Auth user created:', authData.user.id)
+    console.log('Session exists:', !!authData.session)
 
     // Create user profile in our users table
     const { data: profile, error: profileError } = await supabase
@@ -46,22 +52,41 @@ export async function signUpWithEmail(email: string, password: string, username:
 
     if (profileError) {
       console.error('Error creating profile:', profileError)
-      // Still return success since auth user was created
+      // Check if this is a duplicate user error
+      if (profileError.code === '23505') {
+        return { user: null, error: 'An account with this email already exists. Please sign in instead.' }
+      }
+      // For other errors, continue - the auth user was still created
+    } else {
+      console.log('User profile created successfully')
     }
 
+    // Check if email confirmation is required (for when you turn it back on)
+    if (!authData.session) {
+      console.log('No session - email confirmation required')
+      return { 
+        user: null, 
+        error: 'Please check your email and click the confirmation link to complete your registration.',
+        needsConfirmation: true
+      }
+    }
+
+    console.log('Signup successful with active session')
+    
+    // Session exists - user is logged in and ready to go
     return {
       user: {
         id: authData.user.id,
         email,
         username,
-        balance: 0,
-        createdAt: new Date().toISOString()
+        balance: profile?.balance || 0,
+        createdAt: profile?.created_at || new Date().toISOString()
       },
       error: null
     }
   } catch (err) {
     console.error('Sign up error:', err)
-    return { user: null, error: 'An unexpected error occurred' }
+    return { user: null, error: 'An unexpected error occurred. Please try again.' }
   }
 }
 
@@ -267,6 +292,31 @@ export async function getCurrentUser(): Promise<{ user: User | null; error: stri
   } catch (err) {
     console.error('Get current user error:', err)
     return { user: null, error: 'An unexpected error occurred' }
+  }
+}
+
+// Check if username is available
+export async function checkUsernameAvailability(username: string): Promise<{ available: boolean; error: string | null }> {
+  try {
+    if (!username || username.length < 3) {
+      return { available: false, error: 'Username must be at least 3 characters' }
+    }
+
+    const { data, error } = await supabase
+      .from('users')
+      .select('username')
+      .eq('username', username)
+      .maybeSingle()
+
+    if (error) {
+      console.error('Error checking username:', error)
+      return { available: false, error: 'Could not check username availability' }
+    }
+
+    return { available: !data, error: null }
+  } catch (err) {
+    console.error('Username check error:', err)
+    return { available: false, error: 'An unexpected error occurred' }
   }
 }
 

@@ -1,40 +1,25 @@
 "use client"
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { User as UserIcon, LogOut, Trophy, ChevronDown, Loader2 } from 'lucide-react'
-import { getCurrentUser, signOut, User } from '../lib/auth'
+import { signOut } from '../lib/auth'
+import { useAuth } from './AuthProvider'
 
 export function UserHeader() {
-  const [user, setUser] = useState<User | null>(null)
-  const [loading, setLoading] = useState(true)
+  const { user, loading, refreshUser } = useAuth()
   const [showDropdown, setShowDropdown] = useState(false)
   const [signingOut, setSigningOut] = useState(false)
   const router = useRouter()
 
-  useEffect(() => {
-    // Check for user on mount
-    const checkUser = async () => {
-      try {
-        const { user } = await getCurrentUser()
-        setUser(user)
-      } catch (err) {
-        console.error('Error checking user:', err)
-      } finally {
-        setLoading(false)
-      }
-    }
-    
-    checkUser()
-  }, [])
-
   const handleSignOut = async () => {
     setSigningOut(true)
     await signOut()
-    setUser(null)
+    await refreshUser()
     setShowDropdown(false)
-    router.refresh()
+    setSigningOut(false)
+    router.push('/auth')
   }
 
   // While loading, show nothing (prevents flash)

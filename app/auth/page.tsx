@@ -1,10 +1,10 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { Mail, Phone, ArrowRight, Loader2, Eye, EyeOff, ChevronLeft, Check } from "lucide-react"
-import { signUpWithEmail, signInWithEmail, signInWithPhone, verifyPhoneOTP } from "../lib/auth"
+import { Mail, Phone, ArrowRight, Loader2, Eye, EyeOff, ChevronLeft, Check, X } from "lucide-react"
+import { signUpWithEmail, signInWithEmail, signInWithPhone, verifyPhoneOTP, checkUsernameAvailability } from "../lib/auth"
 
 type AuthMode = 'signin' | 'signup' | 'phone' | 'verify'
 
@@ -21,6 +21,58 @@ export default function AuthPage() {
   const [username, setUsername] = useState('')
   const [phone, setPhone] = useState('')
   const [otp, setOtp] = useState('')
+  
+  // Username availability
+  const [usernameChecking, setUsernameChecking] = useState(false)
+  const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(null)
+  const [usernameError, setUsernameError] = useState<string | null>(null)
+
+  // Check username availability with debounce
+  useEffect(() => {
+    if (mode !== 'signup' || !username) {
+      setUsernameAvailable(null)
+      setUsernameError(null)
+      return
+    }
+
+    // Validate username format first
+    if (username.length < 3) {
+      setUsernameAvailable(false)
+      setUsernameError('Username must be at least 3 characters')
+      return
+    }
+
+    if (username.length > 20) {
+      setUsernameAvailable(false)
+      setUsernameError('Username must be 20 characters or less')
+      return
+    }
+
+    if (!/^[a-zA-Z0-9]+$/.test(username)) {
+      setUsernameAvailable(false)
+      setUsernameError('Username can only contain letters and numbers')
+      return
+    }
+
+    // Debounce the availability check
+    const timeoutId = setTimeout(async () => {
+      setUsernameChecking(true)
+      setUsernameError(null)
+      
+      const { available, error } = await checkUsernameAvailability(username)
+      
+      setUsernameChecking(false)
+      setUsernameAvailable(available)
+      
+      if (error) {
+        setUsernameError(error)
+      } else if (!available) {
+        setUsernameError('Username is already taken')
+      }
+    }, 500) // 500ms debounce
+
+    return () => clearTimeout(timeoutId)
+  }, [username, mode])
 
   const handleEmailAuth = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -40,8 +92,14 @@ export default function AuthPage() {
         if (error) {
           setError(error)
         } else if (user) {
+          console.log('Signup successful, user:', user)
           // Store user locally as backup
           localStorage.setItem('h2h_user', JSON.stringify(user))
+          
+          // Give auth state a moment to propagate before redirecting
+          await new Promise(resolve => setTimeout(resolve, 500))
+          
+          console.log('Redirecting to contests...')
           router.push('/contests')
           return // Don't set loading false, we're navigating
         }
@@ -51,7 +109,13 @@ export default function AuthPage() {
         if (error) {
           setError(error)
         } else if (user) {
+          console.log('Sign in successful, user:', user)
           localStorage.setItem('h2h_user', JSON.stringify(user))
+          
+          // Give auth state a moment to propagate before redirecting
+          await new Promise(resolve => setTimeout(resolve, 500))
+          
+          console.log('Redirecting to contests...')
           router.push('/contests')
           return // Don't set loading false, we're navigating
         }
@@ -143,14 +207,35 @@ export default function AuthPage() {
                 {mode === 'signup' && (
                   <div>
                     <label className="block text-white/60 text-sm mb-2">Username</label>
-                    <input
-                      type="text"
-                      value={username}
-                      onChange={(e) => setUsername(e.target.value)}
-                      placeholder="Choose a username"
-                      required
-                      className="w-full px-4 py-3 bg-black/40 border border-white/10 rounded-xl text-white placeholder-white/30 focus:outline-none focus:border-[#00FF00]/50 transition-colors"
-                    />
+                    <div className="relative">
+                      <input
+                        type="text"
+                        value={username}
+                        onChange={(e) => setUsername(e.target.value)}
+                        placeholder="Choose a username"
+                        required
+                        className="w-full px-4 py-3 pr-12 bg-black/40 border border-white/10 rounded-xl text-white placeholder-white/30 focus:outline-none focus:border-[#00FF00]/50 transition-colors"
+                      />
+                      {username && (
+                        <div className="absolute right-4 top-1/2 -translate-y-1/2">
+                          {usernameChecking && (
+                            <Loader2 size={18} className="animate-spin text-white/40" />
+                          )}
+                          {!usernameChecking && usernameAvailable === true && (
+                            <Check size={18} className="text-[#00FF00]" />
+                          )}
+                          {!usernameChecking && usernameAvailable === false && (
+                            <X size={18} className="text-red-400" />
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    {usernameError && username && (
+                      <p className="mt-1 text-xs text-red-400">{usernameError}</p>
+                    )}
+                    {!usernameError && usernameAvailable && username && (
+                      <p className="mt-1 text-xs text-[#00FF00]">Username is available!</p>
+                    )}
                   </div>
                 )}
                 
@@ -190,8 +275,8 @@ export default function AuthPage() {
 
                 <button
                   type="submit"
-                  disabled={loading}
-                  className="w-full py-4 bg-[#00FF00] text-black font-bold rounded-xl hover:bg-[#00DD00] transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                  disabled={loading || (mode === 'signup' && (usernameChecking || usernameAvailable !== true))}
+                  className="w-full py-4 bg-[#00FF00] text-black font-bold rounded-xl hover:bg-[#00DD00] transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {loading ? (
                     <Loader2 size={20} className="animate-spin" />
