@@ -1,13 +1,14 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useParams, useRouter } from "next/navigation"
 import Link from "next/link"
-import { Trophy, Users, Clock, ChevronLeft, Share2, Copy, Check, Zap, Target, Loader2, Crown, Medal, X, TrendingUp, TrendingDown, Lock } from "lucide-react"
+import { Trophy, Users, Clock, ChevronLeft, Share2, Copy, Check, Zap, Target, Loader2, Crown, Medal, X, TrendingUp, TrendingDown, Lock, Radio, Eye, EyeOff } from "lucide-react"
 import { getContest, Contest, ContestEntry, calculatePayouts, subscribeToContest, EntryPick } from "../../lib/contests"
 import { LivePickTracker } from "../../components/LivePickTracker"
 import { TrackedPick } from "../../lib/resolution"
 import { getCurrentUser } from "../../lib/auth"
+import { resolvePicks, getContestLiveStatus, PickResolutionResult } from "../../actions/getLiveScores"
 
 export default function ContestDetailPage() {
   const params = useParams()
@@ -18,6 +19,16 @@ export default function ContestDetailPage() {
   const [copied, setCopied] = useState(false)
   const [selectedEntry, setSelectedEntry] = useState<ContestEntry | null>(null)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+  
+  // Live scoring state
+  const [liveStatus, setLiveStatus] = useState<{
+    hasGamesStarted: boolean
+    hasGamesCompleted: boolean
+    allGamesCompleted: boolean
+    inProgressCount: number
+  } | null>(null)
+  const [livePickResults, setLivePickResults] = useState<Map<string, PickResolutionResult[]>>(new Map())
+  const [lastUpdate, setLastUpdate] = useState<Date | null>(null)
 
   // Get current user for pick visibility
   useEffect(() => {
@@ -29,6 +40,53 @@ export default function ContestDetailPage() {
     }
     loadCurrentUser()
   }, [])
+
+  // Poll for live scoring updates
+  const pollLiveScores = useCallback(async () => {
+    if (!contest) return
+    
+    try {
+      // Get overall contest status
+      const status = await getContestLiveStatus()
+      setLiveStatus(status)
+      
+      // Only resolve picks if games have started
+      if (status.hasGamesStarted && contest.entries.length > 0) {
+        // Resolve picks for all entries (in production, you'd batch this)
+        const resultsMap = new Map<string, PickResolutionResult[]>()
+        
+        for (const entry of contest.entries) {
+          const picks = entry.picks.map(p => ({
+            player: p.player,
+            stat: p.stat,
+            line: p.line,
+            points: p.points
+          }))
+          
+          const results = await resolvePicks(picks)
+          resultsMap.set(entry.id, results)
+        }
+        
+        setLivePickResults(resultsMap)
+        setLastUpdate(new Date())
+      }
+    } catch (error) {
+      console.error('Error polling live scores:', error)
+    }
+  }, [contest])
+
+  // Set up polling interval when contest is live
+  useEffect(() => {
+    if (!contest || contest.status !== 'live') return
+    
+    // Initial poll
+    pollLiveScores()
+    
+    // Poll every 30 seconds during live games
+    const interval = setInterval(pollLiveScores, 30000)
+    
+    return () => clearInterval(interval)
+  }, [contest?.status, pollLiveScores])
 
   useEffect(() => {
     const loadContest = async () => {
@@ -112,10 +170,14 @@ export default function ContestDetailPage() {
     }))
   }
 
-  // Check if contest is live or completed (games have started)
+  // Check contest status
   const isLive = contest.status === 'live'
   const isCompleted = contest.status === 'completed'
   const gamesStarted = new Date(contest.gameTime) <= new Date()
+  
+  // CRITICAL: Opponent data is ONLY visible when contest is fully completed
+  // During open/live: only show your own data
+  const canRevealAllData = isCompleted && (liveStatus?.allGamesCompleted ?? false)
 
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-white relative overflow-hidden" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
@@ -224,23 +286,49 @@ export default function ContestDetailPage() {
         </div>
 
         {/* Pre-Game Notice - picks are hidden */}
-        {!gamesStarted && contest.status === 'open' && (
+        {contest.status === 'open' && (
           <div className="mb-8 p-4 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex items-center gap-4">
             <Lock size={20} className="text-blue-400 shrink-0" />
             <div>
-              <div className="font-bold text-blue-400">Picks Hidden Until Kickoff</div>
-              <div className="text-sm text-white/50">Other players' picks and scores are hidden. All picks revealed once games start!</div>
+              <div className="font-bold text-blue-400">Contest Open - Awaiting Kickoff</div>
+              <div className="text-sm text-white/50">Other players' picks and scores are hidden until the contest concludes. You can only see your own lineup.</div>
             </div>
           </div>
         )}
 
         {/* Live Scoring Notice */}
-        {gamesStarted && !isCompleted && (
+        {isLive && !canRevealAllData && (
           <div className="mb-8 p-4 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center gap-4">
-            <div className="w-3 h-3 rounded-full bg-red-500 animate-pulse"></div>
+            <Radio size={20} className="text-red-400 animate-pulse shrink-0" />
+            <div className="flex-1">
+              <div className="font-bold text-red-400 flex items-center gap-2">
+                Live Scoring Active
+                {liveStatus && (
+                  <span className="text-xs font-normal text-white/40">
+                    ({liveStatus.inProgressCount} games in progress)
+                  </span>
+                )}
+              </div>
+              <div className="text-sm text-white/50">
+                Scores update every 30 seconds from ESPN. Opponent picks remain hidden until all games are final.
+              </div>
+              {lastUpdate && (
+                <div className="text-xs text-white/30 mt-1">
+                  Last updated: {lastUpdate.toLocaleTimeString()}
+                </div>
+              )}
+            </div>
+            <EyeOff size={16} className="text-white/30" />
+          </div>
+        )}
+
+        {/* Contest Complete - All Revealed */}
+        {canRevealAllData && (
+          <div className="mb-8 p-4 rounded-2xl bg-[#00FF00]/10 border border-[#00FF00]/20 flex items-center gap-4">
+            <Eye size={20} className="text-[#00FF00] shrink-0" />
             <div>
-              <div className="font-bold text-red-400">Games In Progress</div>
-              <div className="text-sm text-white/50">Scores update in real-time. Points are awarded when picks hit.</div>
+              <div className="font-bold text-[#00FF00]">Contest Complete - Results Final</div>
+              <div className="text-sm text-white/50">All games have concluded. Full leaderboard and picks are now visible.</div>
             </div>
           </div>
         )}
@@ -291,86 +379,135 @@ export default function ContestDetailPage() {
               <div className="divide-y divide-white/5">
                 {contest.entries.length > 0 ? (
                   contest.entries.slice(0, 50).map((entry, index) => {
-                    const rank = entry.rank || index + 1
-                    const isTop3 = rank <= 3
-                    const isInMoney = rank <= paidPositions
-                    const prize = isInMoney ? Math.floor(contest.prizePool / paidPositions) : 0
-                    
-                    // For pending games, show 0 points (potential points shown separately)
-                    const displayPoints = gamesStarted ? entry.totalPoints : 0
-                    
                     // Check if this is the current user's entry
                     const isOwnEntry = currentUserId && entry.oduserId === currentUserId
-                    // Can view picks if: it's your own entry OR games have started
-                    // Before games start: hide other players' picks to prevent copying
-                    // Once games start: reveal all picks
-                    const canViewPicks = isOwnEntry || gamesStarted
+                    
+                    // CRITICAL: Ranks and prizes only shown after contest is FULLY completed
+                    const rank = canRevealAllData ? (entry.rank || index + 1) : (isOwnEntry ? '—' : '—')
+                    const isTop3 = canRevealAllData && (entry.rank || index + 1) <= 3
+                    const isInMoney = canRevealAllData && (entry.rank || index + 1) <= paidPositions
+                    const prize = isInMoney ? Math.floor(contest.prizePool / paidPositions) : 0
+                    
+                    // Get live pick results for this entry
+                    const entryResults = livePickResults.get(entry.id)
+                    const liveHits = entryResults?.filter(r => r.hit === true).length ?? 0
+                    const liveMisses = entryResults?.filter(r => r.hit === false).length ?? 0
+                    const pending = entryResults?.filter(r => r.hit === null).length ?? 5
+                    
+                    // Points: Only show for own entry until contest completes
+                    // During live: show live-calculated points for own entry
+                    let displayPoints = 0
+                    let displayHits = 0
+                    
+                    if (isOwnEntry) {
+                      // Always show own data
+                      if (isLive && entryResults) {
+                        displayHits = liveHits
+                        const basePoints = entryResults
+                          .filter(r => r.hit === true)
+                          .reduce((sum, r, i) => sum + entry.picks[i]?.points ?? 0, 0)
+                        displayPoints = liveHits === 0 ? 0 : basePoints * liveHits
+                      } else {
+                        displayPoints = entry.totalPoints
+                        displayHits = entry.hitsCount
+                      }
+                    } else if (canRevealAllData) {
+                      // Contest complete - show all data
+                      displayPoints = entry.totalPoints
+                      displayHits = entry.hitsCount
+                    }
+                    
+                    // Can view picks if: it's your own entry OR contest is fully completed
+                    const canViewPicks = isOwnEntry || canRevealAllData
                     
                     return (
                       <div 
                         key={entry.id} 
                         onClick={() => canViewPicks ? setSelectedEntry(entry) : setSelectedEntry({ ...entry, _picksHidden: true } as any)}
                         className={`grid grid-cols-12 gap-4 px-6 py-4 items-center transition-colors cursor-pointer hover:bg-white/[0.05] ${
-                          entry.isPerfect ? 'bg-yellow-500/5' : ''
+                          canRevealAllData && entry.isPerfect ? 'bg-yellow-500/5' : ''
                         } ${isOwnEntry ? 'border-l-2 border-[#00FF00]' : ''}`}
                       >
                         <div className="col-span-1 font-medium text-white/50">
-                          {isTop3 ? (
+                          {canRevealAllData && isTop3 ? (
                             rank === 1 ? <Crown size={16} className="text-yellow-500 fill-yellow-500" /> :
                             rank === 2 ? <Medal size={16} className="text-gray-300" /> :
                             <Medal size={16} className="text-amber-600" />
-                          ) : rank}
+                          ) : (
+                            <span className={isOwnEntry ? 'text-[#00FF00]' : 'text-white/30'}>{rank}</span>
+                          )}
                         </div>
                         
                         <div className="col-span-6 md:col-span-7 flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-white/10 to-transparent border border-white/10 flex items-center justify-center text-xs font-bold text-white/70">
+                          <div className={`w-8 h-8 rounded-full bg-gradient-to-br from-white/10 to-transparent border flex items-center justify-center text-xs font-bold ${
+                            isOwnEntry ? 'border-[#00FF00]/50 text-[#00FF00]' : 'border-white/10 text-white/70'
+                          }`}>
                             {entry.username.charAt(0)}
                           </div>
                           <div className="flex flex-col">
-                            <span className="text-sm font-medium text-white/90">{entry.username}</span>
-                            {isInMoney && displayPoints > 0 && (
-                              <span className="text-[10px] text-[#00FF00] font-medium md:hidden">Winning ${prize}</span>
+                            <span className="text-sm font-medium text-white/90 flex items-center gap-2">
+                              {entry.username}
+                              {isOwnEntry && <span className="text-[9px] bg-[#00FF00]/20 text-[#00FF00] px-1.5 py-0.5 rounded">YOU</span>}
+                            </span>
+                            {/* Only show "Winning" after contest fully complete */}
+                            {canRevealAllData && isInMoney && (
+                              <span className="text-[10px] text-[#00FF00] font-medium md:hidden">Won ${prize}</span>
                             )}
                           </div>
-                          {gamesStarted && entry.hitsCount > 0 && (
+                          {/* Show multiplier badge only for own entry during live, or all after complete */}
+                          {(isOwnEntry || canRevealAllData) && displayHits > 0 && (
                             <span className={`px-1.5 py-0.5 text-[10px] font-bold rounded uppercase tracking-wide border ${
-                              entry.hitsCount === 5 
+                              displayHits === 5 
                                 ? 'bg-yellow-500/20 text-yellow-500 border-yellow-500/20' 
-                                : entry.hitsCount >= 3 
+                                : displayHits >= 3 
                                   ? 'bg-[#00FF00]/20 text-[#00FF00] border-[#00FF00]/20'
                                   : 'bg-white/10 text-white/60 border-white/10'
                             }`}>
-                              {entry.hitsCount}X
+                              {displayHits}X
                             </span>
                           )}
                         </div>
 
                         <div className="col-span-2 text-center">
-                          <div className={`inline-flex items-center justify-center px-2 py-1 rounded-md text-xs font-bold ${
-                            entry.hitsCount === 5 ? 'bg-[#00FF00]/20 text-[#00FF00]' : 
-                            entry.hitsCount > 0 ? 'bg-white/10 text-white/70' :
-                            'bg-white/5 text-white/30'
-                          }`}>
-                            {gamesStarted ? `${entry.hitsCount}/5` : '0/5'}
-                          </div>
+                          {isOwnEntry || canRevealAllData ? (
+                            <div className={`inline-flex items-center justify-center px-2 py-1 rounded-md text-xs font-bold ${
+                              displayHits === 5 ? 'bg-[#00FF00]/20 text-[#00FF00]' : 
+                              displayHits > 0 ? 'bg-white/10 text-white/70' :
+                              'bg-white/5 text-white/30'
+                            }`}>
+                              {displayHits}/5
+                            </div>
+                          ) : (
+                            <div className="inline-flex items-center justify-center px-2 py-1 rounded-md text-xs font-bold bg-white/5 text-white/30">
+                              <Lock size={10} className="mr-1" />
+                              —
+                            </div>
+                          )}
                         </div>
 
                         <div className="col-span-3 md:col-span-2 text-right">
-                          <div className={`text-lg font-bold ${
-                            entry.isPerfect ? 'text-yellow-500' : 
-                            displayPoints > 0 ? 'text-white' : 'text-white/30'
-                          }`} style={{ fontVariantNumeric: 'tabular-nums' }}>
-                            {displayPoints.toFixed(2)}
-                          </div>
-                          {!gamesStarted && (
-                            <div className="text-[10px] text-white/30">
-                              {/* Only show potential points for your own entry before games start */}
-                              {isOwnEntry ? `${entry.totalPoints.toFixed(2)} potential` : '— hidden'}
-                            </div>
-                          )}
-                          {isInMoney && displayPoints > 0 && (
-                            <div className="text-xs text-[#00FF00] font-medium hidden md:block">
-                              Winning ${prize}
+                          {isOwnEntry || canRevealAllData ? (
+                            <>
+                              <div className={`text-lg font-bold ${
+                                canRevealAllData && entry.isPerfect ? 'text-yellow-500' : 
+                                displayPoints > 0 ? 'text-white' : 'text-white/30'
+                              }`} style={{ fontVariantNumeric: 'tabular-nums' }}>
+                                {displayPoints.toFixed(2)}
+                              </div>
+                              {isOwnEntry && isLive && pending > 0 && (
+                                <div className="text-[10px] text-white/30">
+                                  {pending} pending
+                                </div>
+                              )}
+                              {canRevealAllData && isInMoney && (
+                                <div className="text-xs text-[#00FF00] font-medium hidden md:block">
+                                  Won ${prize}
+                                </div>
+                              )}
+                            </>
+                          ) : (
+                            <div className="text-lg font-bold text-white/20" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                              —
                             </div>
                           )}
                         </div>
@@ -391,9 +528,9 @@ export default function ContestDetailPage() {
               {contest.entries.length > 0 && (
                 <div className="px-6 py-3 border-t border-white/5 text-center">
                   <span className="text-xs text-white/30">
-                    {gamesStarted 
-                      ? 'Click on a player to view their picks'
-                      : 'Click on your entry to view picks. Other picks revealed once games start.'}
+                    {canRevealAllData 
+                      ? 'Click on any player to view their picks and results'
+                      : 'Click on your entry to view your picks. Others hidden until contest concludes.'}
                   </span>
                 </div>
               )}
@@ -460,6 +597,7 @@ export default function ContestDetailPage() {
       {selectedEntry && (() => {
         const picksHidden = (selectedEntry as any)._picksHidden === true
         const isOwnEntry = currentUserId && selectedEntry.oduserId === currentUserId
+        const entryResults = livePickResults.get(selectedEntry.id)
         
         return (
           <div 
@@ -485,11 +623,11 @@ export default function ContestDetailPage() {
                     </div>
                     <div className="text-xs text-white/40">
                       {picksHidden ? (
-                        'Points hidden until kickoff'
+                        'Picks hidden until contest concludes'
                       ) : (
                         <>
                           {selectedEntry.hitsCount}/5 Hits • {selectedEntry.totalPoints.toFixed(2)} pts
-                          {selectedEntry.hitsCount > 0 && gamesStarted && (
+                          {selectedEntry.hitsCount > 0 && (isLive || canRevealAllData) && (
                             <span className="text-yellow-500 ml-1">({selectedEntry.hitsCount}x multiplier)</span>
                           )}
                         </>
@@ -513,18 +651,34 @@ export default function ContestDetailPage() {
                   </div>
                   <h3 className="text-lg font-semibold text-white/80 mb-2">Picks Hidden</h3>
                   <p className="text-sm text-white/40 max-w-xs mx-auto">
-                    Other players' picks are hidden until games start. This prevents copying strategies before kickoff.
+                    Other players' picks remain hidden until the contest concludes and all games are final. This ensures fair competition.
                   </p>
                 </div>
               ) : (
                 <div className="p-4 max-h-[60vh] overflow-y-auto">
-                  <div className="text-xs text-white/40 uppercase tracking-wider mb-3">
-                    {isOwnEntry ? 'Your Lineup' : 'Lineup'}
+                  <div className="text-xs text-white/40 uppercase tracking-wider mb-3 flex items-center justify-between">
+                    <span>{isOwnEntry ? 'Your Lineup' : 'Lineup'}</span>
+                    {isLive && lastUpdate && (
+                      <span className="text-[10px] text-white/30 flex items-center gap-1">
+                        <Radio size={10} className="animate-pulse text-red-400" />
+                        Live
+                      </span>
+                    )}
                   </div>
                   <div className="space-y-3">
-                    {selectedEntry.picks.map((pick, index) => (
-                      <PickCard key={index} pick={pick} index={index + 1} gamesStarted={gamesStarted} />
-                    ))}
+                    {selectedEntry.picks.map((pick, index) => {
+                      const liveResult = entryResults?.[index]
+                      return (
+                        <PickCard 
+                          key={index} 
+                          pick={pick} 
+                          index={index + 1} 
+                          gamesStarted={gamesStarted}
+                          liveResult={liveResult}
+                          contestCompleted={canRevealAllData}
+                        />
+                      )
+                    })}
                   </div>
                 </div>
               )}
@@ -533,24 +687,35 @@ export default function ContestDetailPage() {
               <div className="p-4 border-t border-white/10 bg-black/20">
                 {picksHidden ? (
                   <div className="text-center text-white/40 text-sm py-2">
-                    Scores revealed once games start
+                    Scores and picks revealed when contest concludes
                   </div>
                 ) : (
                   <div className="flex items-center justify-between">
                     <div>
-                      <div className="text-xs text-white/40">Total Points</div>
+                      <div className="text-xs text-white/40">
+                        {canRevealAllData ? 'Final Points' : isLive ? 'Current Points' : 'Potential Points'}
+                      </div>
                       <div className="text-2xl font-bold text-white" style={{ fontVariantNumeric: 'tabular-nums' }}>
-                        {gamesStarted ? selectedEntry.totalPoints.toFixed(2) : '0.00'}
-                        {selectedEntry.hitsCount > 0 && gamesStarted && (
+                        {selectedEntry.totalPoints.toFixed(2)}
+                        {selectedEntry.hitsCount > 0 && (
                           <span className="text-yellow-500 text-sm ml-2">({selectedEntry.hitsCount}x)</span>
                         )}
                       </div>
                     </div>
-                    {!gamesStarted && (
+                    {isLive && !canRevealAllData && (
                       <div className="text-right">
-                        <div className="text-xs text-white/40">Base Score</div>
-                        <div className="text-lg font-medium text-white/50" style={{ fontVariantNumeric: 'tabular-nums' }}>
-                          {selectedEntry.totalPoints.toFixed(2)} pts
+                        <div className="text-xs text-white/40">Status</div>
+                        <div className="text-sm font-medium text-red-400 flex items-center gap-1">
+                          <Radio size={12} className="animate-pulse" />
+                          Scoring Live
+                        </div>
+                      </div>
+                    )}
+                    {canRevealAllData && selectedEntry.prize && (
+                      <div className="text-right">
+                        <div className="text-xs text-white/40">Prize Won</div>
+                        <div className="text-lg font-bold text-[#00FF00]">
+                          ${selectedEntry.prize}
                         </div>
                       </div>
                     )}
@@ -565,26 +730,57 @@ export default function ContestDetailPage() {
   )
 }
 
-// Individual pick card for the modal
-function PickCard({ pick, index, gamesStarted }: { pick: EntryPick; index: number; gamesStarted: boolean }) {
-  // For now, show pending status since we don't have live data in this context
-  const status = gamesStarted ? (pick.hit === true ? 'hit' : pick.hit === false ? 'miss' : 'pending') : 'pending'
+// Individual pick card for the modal with live data support
+function PickCard({ 
+  pick, 
+  index, 
+  gamesStarted,
+  liveResult,
+  contestCompleted
+}: { 
+  pick: EntryPick
+  index: number
+  gamesStarted: boolean
+  liveResult?: PickResolutionResult
+  contestCompleted?: boolean
+}) {
+  // Determine status from live data or stored pick data
+  let status: 'pending' | 'live' | 'hit' | 'miss' = 'pending'
+  let currentValue = 0
+  let gameClock = ''
   
-  const statusConfig = {
-    pending: { color: '#888888', icon: '⏳', text: 'Pending' },
-    hit: { color: '#00FF00', icon: '✅', text: 'HIT' },
-    miss: { color: '#ef4444', icon: '❌', text: 'MISS' }
+  if (liveResult) {
+    currentValue = liveResult.currentValue
+    gameClock = liveResult.gameClock || ''
+    
+    if (liveResult.hit === true) {
+      status = 'hit'
+    } else if (liveResult.hit === false) {
+      status = 'miss'
+    } else if (liveResult.gameStatus === 'in') {
+      status = 'live'
+    }
+  } else if (gamesStarted || contestCompleted) {
+    status = pick.hit === true ? 'hit' : pick.hit === false ? 'miss' : 'pending'
   }
   
-  const config = statusConfig[status as keyof typeof statusConfig]
+  const statusConfig = {
+    pending: { color: '#888888', icon: '⏳', text: 'Pending', bgColor: 'rgba(255, 255, 255, 0.05)' },
+    live: { color: '#FFD700', icon: '🔴', text: gameClock || 'LIVE', bgColor: 'rgba(255, 215, 0, 0.1)' },
+    hit: { color: '#00FF00', icon: '✅', text: 'HIT', bgColor: 'rgba(0, 255, 0, 0.1)' },
+    miss: { color: '#ef4444', icon: '❌', text: 'MISS', bgColor: 'rgba(239, 68, 68, 0.1)' }
+  }
+  
+  const config = statusConfig[status]
   
   return (
     <div 
       className="p-4 rounded-xl border transition-all"
       style={{
-        backgroundColor: '#0a0a0a',
+        backgroundColor: config.bgColor,
         borderColor: status === 'hit' ? 'rgba(0, 255, 0, 0.3)' : 
                      status === 'miss' ? 'rgba(239, 68, 68, 0.3)' : 
+                     status === 'live' ? 'rgba(255, 215, 0, 0.3)' :
                      'rgba(255, 255, 255, 0.1)'
       }}
     >
@@ -603,15 +799,23 @@ function PickCard({ pick, index, gamesStarted }: { pick: EntryPick; index: numbe
         {/* Player info */}
         <div className="flex-1 min-w-0">
           <div className="font-semibold text-white truncate">{pick.player}</div>
-          <div className="text-xs text-white/40 uppercase tracking-wide">
-            {pick.line}+ {pick.stat.replace(' Yards', '').replace('Passing', 'Pass').replace('Rushing', 'Rush').replace('Receiving', 'Rec')}
+          <div className="text-xs text-white/40 uppercase tracking-wide flex items-center gap-2">
+            <span>{pick.line}+ {pick.stat.replace(' Yards', '').replace('Passing', 'Pass').replace('Rushing', 'Rush').replace('Receiving', 'Rec')}</span>
+            {/* Show live current value */}
+            {status === 'live' && currentValue > 0 && (
+              <span className="text-yellow-400 font-medium">
+                ({currentValue} current)
+              </span>
+            )}
           </div>
         </div>
 
         {/* Status & Points */}
         <div className="text-right flex-shrink-0">
           <div 
-            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium mb-1"
+            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium mb-1 ${
+              status === 'live' ? 'animate-pulse' : ''
+            }`}
             style={{ 
               backgroundColor: `${config.color}20`,
               color: config.color
@@ -623,11 +827,16 @@ function PickCard({ pick, index, gamesStarted }: { pick: EntryPick; index: numbe
           <div 
             className="text-sm font-bold"
             style={{ 
-              color: status === 'hit' ? '#00FF00' : status === 'miss' ? '#ef4444' : '#888',
+              color: status === 'hit' ? '#00FF00' : 
+                     status === 'miss' ? '#ef4444' : 
+                     status === 'live' ? '#FFD700' : '#888',
               fontVariantNumeric: 'tabular-nums'
             }}
           >
-            {status === 'hit' ? `+${pick.points.toFixed(2)}` : status === 'miss' ? '0.00' : `${pick.points.toFixed(2)} pot.`}
+            {status === 'hit' ? `+${pick.points.toFixed(2)}` : 
+             status === 'miss' ? '0.00' : 
+             status === 'live' ? `${pick.points.toFixed(2)} if hit` :
+             `${pick.points.toFixed(2)} pot.`}
           </div>
         </div>
       </div>
