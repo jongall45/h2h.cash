@@ -226,66 +226,85 @@ export async function verifyPhoneOTP(phone: string, token: string): Promise<{ us
 
 // Sign out
 export async function signOut(): Promise<void> {
-  await supabase.auth.signOut()
-  // Clear local storage
+  // Clear localStorage first
   if (typeof window !== 'undefined') {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    if (supabaseUrl) {
+      const storageKey = `sb-${new URL(supabaseUrl).hostname.split('.')[0]}-auth-token`
+      localStorage.removeItem(storageKey)
+    }
     localStorage.removeItem('h2h_user')
   }
+  // Then try SDK signout (don't await in case it hangs)
+  supabase.auth.signOut().catch(() => {})
 }
 
-// Get current session
+// Get current session - read from localStorage first to avoid SDK issues
 export async function getCurrentUser(): Promise<{ user: User | null; error: string | null }> {
   try {
-    const { data: { session } } = await supabase.auth.getSession()
-    
-    if (!session?.user) {
-      return { user: null, error: null }
-    }
-
-    // Try to get user profile from our users table
-    let { data: profile, error: profileError } = await supabase
-      .from('users')
-      .select('*')
-      .eq('id', session.user.id)
-      .single()
-
-    // If profile doesn't exist, create it
-    if (profileError && profileError.code === 'PGRST116') {
-      const username = session.user.email?.split('@')[0] || session.user.phone?.slice(-4) || 'User'
-      const { data: newProfile, error: insertError } = await supabase
-        .from('users')
-        .insert({
-          id: session.user.id,
-          email: session.user.email,
-          phone: session.user.phone,
-          username,
-          balance: 0
-        })
-        .select()
-        .single()
-      
-      if (insertError) {
-        console.error('Error creating user profile:', insertError)
-      } else {
-        profile = newProfile
+    // First try to read from localStorage directly (our manual session)
+    if (typeof window !== 'undefined') {
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+      if (supabaseUrl) {
+        const storageKey = `sb-${new URL(supabaseUrl).hostname.split('.')[0]}-auth-token`
+        const stored = localStorage.getItem(storageKey)
+        
+        if (stored) {
+          try {
+            const session = JSON.parse(stored)
+            if (session?.user && session?.access_token) {
+              // Check if session is expired
+              const now = Math.floor(Date.now() / 1000)
+              if (session.expires_at && session.expires_at > now) {
+                return {
+                  user: {
+                    id: session.user.id,
+                    email: session.user.email,
+                    phone: session.user.phone,
+                    username: session.user.email?.split('@')[0] || 'User',
+                    balance: 0,
+                    createdAt: session.user.created_at
+                  },
+                  error: null
+                }
+              }
+            }
+          } catch (e) {
+            // Invalid JSON, continue to SDK fallback
+          }
+        }
       }
     }
 
-    return {
-      user: {
-        id: session.user.id,
-        email: session.user.email,
-        phone: session.user.phone,
-        username: profile?.username || session.user.email?.split('@')[0] || 'User',
-        avatarUrl: profile?.avatar_url,
-        balance: profile?.balance || 0,
-        createdAt: profile?.created_at || session.user.created_at
-      },
-      error: null
-    }
+    // Fallback to SDK with timeout
+    const timeoutPromise = new Promise<{ user: null; error: null }>((resolve) => {
+      setTimeout(() => resolve({ user: null, error: null }), 3000)
+    })
+    
+    const sessionPromise = (async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      
+      if (!session?.user) {
+        return { user: null, error: null }
+      }
+
+      return {
+        user: {
+          id: session.user.id,
+          email: session.user.email,
+          phone: session.user.phone,
+          username: session.user.email?.split('@')[0] || 'User',
+          balance: 0,
+          createdAt: session.user.created_at
+        } as User,
+        error: null
+      }
+    })()
+
+    return await Promise.race([sessionPromise, timeoutPromise])
   } catch (err) {
     console.error('Get current user error:', err)
-    return { user: null, error: 'An unexpected error occurred' }
+    return { user: null, error: null }
   }
 }
 

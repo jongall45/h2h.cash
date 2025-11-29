@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { User as UserIcon, LogOut, Trophy, ChevronDown, Loader2 } from 'lucide-react'
@@ -11,7 +11,18 @@ export function UserHeader() {
   const { user, loading, refreshUser } = useAuth()
   const [showDropdown, setShowDropdown] = useState(false)
   const [signingOut, setSigningOut] = useState(false)
+  const [showFallback, setShowFallback] = useState(false)
   const router = useRouter()
+
+  // After 2 seconds of loading, show sign in button anyway
+  useEffect(() => {
+    if (loading) {
+      const timer = setTimeout(() => setShowFallback(true), 2000)
+      return () => clearTimeout(timer)
+    } else {
+      setShowFallback(false)
+    }
+  }, [loading])
 
   const handleSignOut = async () => {
     setSigningOut(true)
@@ -22,9 +33,13 @@ export function UserHeader() {
     router.push('/auth')
   }
 
-  // While loading, show nothing (prevents flash)
-  if (loading) {
-    return null
+  // While loading, show spinner briefly then fallback to sign in
+  if (loading && !showFallback) {
+    return (
+      <div className="px-4 py-2">
+        <Loader2 size={20} className="animate-spin text-white/40" />
+      </div>
+    )
   }
 
   // Not logged in - show sign in button
