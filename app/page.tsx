@@ -13,9 +13,9 @@ import { DoubleDown } from "./components/DoubleDown"
 import { Header } from "./components/Header"
 import { Timer } from "./components/Timer"
 import { OpponentReveal } from "./components/OpponentReveal"
-import { Explainer } from "./components/Explainer"
 
 import { MatchupCard } from "./components/ui/SpotlightCard"
+import { UserHeader } from "./components/UserHeader"
 
 // All 32 NFL team abbreviations for logos
 const NFL_TEAMS = [
@@ -130,12 +130,12 @@ function SummaryPickRow({ pick, isYou }: { pick: any; isYou: boolean }) {
   const [imageError, setImageError] = useState(false)
 
   useEffect(() => {
-    if (pick.player) {
+    if (pick.player && isYou) {
       getPlayerId(pick.player).then(id => {
         if (id) setHeadshotUrl(getPlayerHeadshotUrl(id))
       })
     }
-  }, [pick.player])
+  }, [pick.player, isYou])
 
   const points = pick.potentialPoints ?? pick.points ?? 5
   const line = pick.finalLine ?? pick.line ?? '—'
@@ -162,7 +162,7 @@ function SummaryPickRow({ pick, isYou }: { pick: any; isYou: boolean }) {
         border: `1px solid ${accentColor}40`,
         flexShrink: 0
       }}>
-        {headshotUrl && !imageError ? (
+        {isYou && headshotUrl && !imageError ? (
           <img 
             src={headshotUrl} 
             alt={pick.player}
@@ -171,18 +171,18 @@ function SummaryPickRow({ pick, isYou }: { pick: any; isYou: boolean }) {
           />
         ) : (
           <div style={{ width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#555', fontSize: 10, fontWeight: 500 }}>
-            {pick.player?.charAt(0) || '?'}
+            {isYou ? (pick.player?.charAt(0) || '?') : '?'}
           </div>
         )}
       </div>
       
       {/* Info */}
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: '11px', fontWeight: 500, color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-          {pick.player}
+        <div style={{ fontSize: '11px', fontWeight: 500, color: isYou ? '#fff' : '#555', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          {isYou ? pick.player : 'LOCKED'}
         </div>
         <div style={{ fontSize: '9px', color: '#666' }}>
-          {line}+ {pick.stat?.replace(' Yards', '').replace('Passing', 'Pass').replace('Receiving', 'Rec').replace('Rushing', 'Rush')}
+          {isYou ? `${line}+ ${pick.stat?.replace(' Yards', '').replace('Passing', 'Pass').replace('Receiving', 'Rec').replace('Rushing', 'Rush')}` : 'Hidden until kickoff'}
         </div>
       </div>
       
@@ -190,10 +190,11 @@ function SummaryPickRow({ pick, isYou }: { pick: any; isYou: boolean }) {
       <div style={{ 
         fontSize: '13px', 
         fontWeight: 600, 
-        color: points > 5 ? '#00FF00' : points < 5 ? '#ef4444' : '#fff',
-        flexShrink: 0
+        color: isYou ? (points > 2 ? '#00FF00' : points < 1.5 ? '#ef4444' : '#fff') : '#555',
+        flexShrink: 0,
+        fontVariantNumeric: 'tabular-nums'
       }}>
-        {points}
+        {isYou ? (typeof points === 'number' ? points.toFixed(2) : points) : '—'}
       </div>
     </div>
   )
@@ -242,7 +243,15 @@ export default function Home() {
     setStep('SPINNING')
   }
 
-  const handleSpinComplete = async () => {
+  const handleSpinComplete = async (preloadedProps?: any[]) => {
+    // If props were preloaded during countdown, use them directly
+    if (preloadedProps && preloadedProps.length > 0) {
+      setAvailableProps(preloadedProps)
+      setStep('SELECTION')
+      return
+    }
+    
+    // Otherwise, load props now (fallback)
     setStep('LOADING_PROPS')
     const props = await getGameProps(targetGame.id)
     
@@ -400,15 +409,7 @@ export default function Home() {
         <div className="min-h-screen relative z-10">
           {/* Header */}
           <header style={{ position: 'fixed', top: 0, right: 0, left: 'auto', zIndex: 50, padding: '16px 24px' }}>
-            <Link 
-              href="/login"
-              className="psl-glass-btn"
-              style={{ textDecoration: 'none' }}
-            >
-              <span className="dot"></span>
-              <span className="btn-text">Sign Up</span>
-              <span className="arrow">→</span>
-            </Link>
+            <UserHeader />
           </header>
 
           {/* Main content - centered */}
@@ -465,28 +466,43 @@ export default function Home() {
             </p>
             
             {/* Glass Pill Buttons */}
-            <div className="flex flex-row items-center gap-4 mb-16">
+            <div className="flex flex-col items-center gap-4 mb-16">
+              {/* Top Row - Main Actions */}
+              <div className="flex flex-row items-center gap-4">
+                {/* HOW TO PLAY */}
+                <button 
+                  onClick={() => setShowExplainer(true)}
+                  className="psl-glass-btn"
+                >
+                  <span className="dot"></span>
+                  <span className="btn-text">How to Play</span>
+                  <span className="arrow">→</span>
+                </button>
+                
+                {/* DRAFT NOW - Quick H2H */}
+                <button 
+                  onClick={() => findMatch(false)}
+                  className="psl-glass-btn"
+                >
+                  <span className="dot"></span>
+                  <span className="btn-text">Quick Draft</span>
+                  <span className="arrow">→</span>
+                </button>
+              </div>
               
-              {/* HOW TO PLAY */}
-              <button 
-                onClick={() => setShowExplainer(true)}
+              {/* Tournament Mode Button */}
+              <Link
+                href="/contests"
                 className="psl-glass-btn"
+                style={{ 
+                  background: 'linear-gradient(135deg, rgba(0, 255, 0, 0.1) 0%, rgba(0, 200, 0, 0.05) 100%)',
+                  borderColor: 'rgba(0, 255, 0, 0.3)'
+                }}
               >
-                <span className="dot"></span>
-                <span className="btn-text">How to Play</span>
+                <span className="dot" style={{ background: '#FFD700', boxShadow: '0 0 10px #FFD700' }}></span>
+                <span className="btn-text">🏆 Tournaments</span>
                 <span className="arrow">→</span>
-              </button>
-              
-              {/* DRAFT NOW */}
-              <button 
-                onClick={() => findMatch(false)}
-                className="psl-glass-btn"
-              >
-                <span className="dot"></span>
-                <span className="btn-text">Draft Now</span>
-                <span className="arrow">→</span>
-              </button>
-              
+              </Link>
             </div>
 
             {/* NFL Team Logos Marquee */}
@@ -497,7 +513,124 @@ export default function Home() {
 
           {/* How to Play Modal */}
           {showExplainer && (
-            <Explainer onClose={() => setShowExplainer(false)} />
+            <div 
+              style={{
+                position: 'fixed',
+                inset: 0,
+                zIndex: 9999,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: 'rgba(0, 0, 0, 0.85)',
+                backdropFilter: 'blur(8px)',
+                padding: '20px'
+              }}
+              onClick={() => setShowExplainer(false)}
+            >
+              <div 
+                style={{
+                  backgroundColor: '#111',
+                  border: '1px solid #222',
+                  borderRadius: '20px',
+                  padding: '28px',
+                  maxWidth: '380px',
+                  width: '100%',
+                  boxShadow: '0 20px 60px rgba(0, 0, 0, 0.5)'
+                }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                {/* Header */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
+                  <h3 style={{ fontSize: '20px', fontWeight: 500, color: '#fff', margin: 0 }}>How to Play</h3>
+                  <button 
+                    onClick={() => setShowExplainer(false)} 
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: '#555',
+                      cursor: 'pointer',
+                      padding: '4px'
+                    }}
+                  >
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M18 6L6 18M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+
+                {/* Steps */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+                    <div style={{ width: '24px', height: '24px', borderRadius: '50%', backgroundColor: 'rgba(0, 255, 0, 0.15)', border: '1px solid rgba(0, 255, 0, 0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <span style={{ fontSize: '11px', fontWeight: 600, color: '#00FF00' }}>1</span>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '14px', fontWeight: 500, color: '#fff', marginBottom: '2px' }}>Find a Match</div>
+                      <div style={{ fontSize: '12px', color: '#666' }}>Get randomly paired with an opponent for a head-to-head draft</div>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+                    <div style={{ width: '24px', height: '24px', borderRadius: '50%', backgroundColor: 'rgba(0, 255, 0, 0.15)', border: '1px solid rgba(0, 255, 0, 0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <span style={{ fontSize: '11px', fontWeight: 600, color: '#00FF00' }}>2</span>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '14px', fontWeight: 500, color: '#fff', marginBottom: '2px' }}>Draft 5 Props</div>
+                      <div style={{ fontSize: '12px', color: '#666' }}>Select player props and adjust the line - go safe or risky</div>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+                    <div style={{ width: '24px', height: '24px', borderRadius: '50%', backgroundColor: 'rgba(0, 255, 0, 0.15)', border: '1px solid rgba(0, 255, 0, 0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <span style={{ fontSize: '11px', fontWeight: 600, color: '#00FF00' }}>3</span>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '14px', fontWeight: 500, color: '#fff', marginBottom: '2px' }}>Earn Points</div>
+                      <div style={{ fontSize: '12px', color: '#666' }}>Each prop hit earns points - you don't need to hit every leg</div>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+                    <div style={{ width: '24px', height: '24px', borderRadius: '50%', backgroundColor: 'rgba(255, 107, 53, 0.15)', border: '1px solid rgba(255, 107, 53, 0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <span style={{ fontSize: '11px', fontWeight: 600, color: '#ff6b35' }}>4</span>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '14px', fontWeight: 500, color: '#fff', marginBottom: '2px' }}>Double Down</div>
+                      <div style={{ fontSize: '12px', color: '#666' }}>Risk half your entry for an 8x multiplier on winnings</div>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+                    <div style={{ width: '24px', height: '24px', borderRadius: '50%', backgroundColor: 'rgba(0, 255, 0, 0.15)', border: '1px solid rgba(0, 255, 0, 0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <span style={{ fontSize: '11px', fontWeight: 600, color: '#00FF00' }}>5</span>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '14px', fontWeight: 500, color: '#fff', marginBottom: '2px' }}>Beat Your Opponent</div>
+                      <div style={{ fontSize: '12px', color: '#666' }}>Outscore them to win cash - it's that simple</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Close Button */}
+                <button 
+                  onClick={() => setShowExplainer(false)}
+                  style={{
+                    width: '100%',
+                    marginTop: '24px',
+                    padding: '14px',
+                    background: 'linear-gradient(90deg, #00FF00, #00DD00)',
+                    border: 'none',
+                    borderRadius: '12px',
+                    color: '#000',
+                    fontSize: '14px',
+                    fontWeight: 600,
+                    cursor: 'pointer'
+                  }}
+                >
+                  Got It
+                </button>
+              </div>
+            </div>
           )}
         </div>
       )}
@@ -560,6 +693,37 @@ export default function Home() {
                   PICK {picks.length + 1} / 5
                 </div>
                 <BettingCard {...selectedProp} onLockIn={handleLockIn} />
+                
+                {/* Back Button */}
+                <button
+                  onClick={() => {
+                    setSelectedProp(null)
+                    setStep('SELECTION')
+                  }}
+                  style={{
+                    marginTop: '8px',
+                    padding: '12px 20px',
+                    backgroundColor: 'transparent',
+                    border: '1px solid #333',
+                    color: '#888',
+                    fontWeight: 500,
+                    fontSize: '12px',
+                    letterSpacing: '0.05em',
+                    borderRadius: '12px',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px'
+                  }}
+                  className="hover:border-[#00FF00] hover:text-white"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M19 12H5M12 19l-7-7 7-7" />
+                  </svg>
+                  Back to Props
+                </button>
               </div>
             )}
 
@@ -579,7 +743,7 @@ export default function Home() {
               const yourPicks = picks.slice(0, 5)
               const theirPicks = opponentPicks.slice(0, 5)
               const yourTotal = yourPicks.reduce((sum, p) => sum + (p.potentialPoints || 5), 0)
-              const theirTotal = theirPicks.reduce((sum, p) => sum + (p.points || 5), 0)
+              // Opponent total is hidden until games start
               
               return (
                 <div className="w-full max-w-[420px] mx-auto">
@@ -595,8 +759,11 @@ export default function Home() {
                     {/* Header */}
                     <div style={{ padding: '16px 16px 12px', textAlign: 'center', borderBottom: '1px solid #1a1a1a' }}>
                       <h1 style={{ fontSize: '20px', fontWeight: 300, color: '#fff', marginBottom: '4px' }}>
-                        DRAFT <span style={{ color: '#00FF00', fontWeight: 600 }}>COMPLETE</span>
+                        CONTEST <span style={{ color: '#FFD700', fontWeight: 600 }}>PENDING</span>
                       </h1>
+                      <p style={{ fontSize: '10px', color: '#666', textTransform: 'uppercase', letterSpacing: '0.1em', marginTop: '4px' }}>
+                        Waiting for Live Data Feed
+                      </p>
                       
                       {isDoubledDown && (
                         <div style={{ 
@@ -615,7 +782,7 @@ export default function Home() {
                       )}
                     </div>
 
-                    {/* Payout & Score Summary */}
+                    {/* Payout & Score Summary - Opponent score hidden */}
                     <div style={{ 
                       margin: '12px 12px 0',
                       padding: '16px',
@@ -627,16 +794,16 @@ export default function Home() {
                       alignItems: 'center'
                     }}>
                       <div style={{ textAlign: 'center' }}>
-                        <div style={{ fontSize: '28px', fontWeight: 600, color: '#00FF00' }}>{yourTotal}</div>
-                        <div style={{ fontSize: '9px', color: '#00FF00', textTransform: 'uppercase', letterSpacing: '0.1em' }}>You</div>
+                        <div style={{ fontSize: '28px', fontWeight: 600, color: '#00FF00', fontVariantNumeric: 'tabular-nums' }}>{yourTotal.toFixed(2)}</div>
+                        <div style={{ fontSize: '9px', color: '#00FF00', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Your Draft</div>
                       </div>
                       <div style={{ textAlign: 'center' }}>
-                        <div style={{ fontSize: '24px', fontWeight: 300, color: '#00FF00' }}>${potentialPayout}</div>
-                        <div style={{ fontSize: '8px', color: '#555', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Payout</div>
+                        <div style={{ fontSize: '24px', fontWeight: 300, color: '#FFD700' }}>${potentialPayout}</div>
+                        <div style={{ fontSize: '8px', color: '#555', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Potential</div>
                       </div>
                       <div style={{ textAlign: 'center' }}>
-                        <div style={{ fontSize: '28px', fontWeight: 600, color: '#ff6b35' }}>{theirTotal}</div>
-                        <div style={{ fontSize: '9px', color: '#ff6b35', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Opp</div>
+                        <div style={{ fontSize: '28px', fontWeight: 600, color: '#555', fontVariantNumeric: 'tabular-nums' }}>—</div>
+                        <div style={{ fontSize: '9px', color: '#555', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Opp (Hidden)</div>
                       </div>
                     </div>
 
@@ -657,9 +824,12 @@ export default function Home() {
                           </div>
                         </div>
                         <div style={{ flex: 1, padding: '10px 8px' }}>
-                          <div style={{ fontSize: '9px', color: '#ff6b35', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.1em', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                            <span style={{ width: 5, height: 5, borderRadius: '50%', backgroundColor: '#ff6b35' }}></span>
-                            Opponent
+                          <div style={{ fontSize: '9px', color: '#555', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.1em', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#555" strokeWidth="2">
+                              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                              <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                            </svg>
+                            Opponent (Locked)
                           </div>
                         </div>
                       </div>
@@ -673,12 +843,36 @@ export default function Home() {
                           ))}
                         </div>
                         
-                        {/* Opponent Picks Column */}
+                        {/* Opponent Picks Column - All locked */}
                         <div style={{ flex: 1, padding: '8px' }}>
                           {theirPicks.map((p, i) => (
                             <SummaryPickRow key={i} pick={{...p, potentialPoints: p.points, finalLine: p.line}} isYou={false} />
                           ))}
                         </div>
+                      </div>
+                    </div>
+                    
+                    {/* Pending Notice */}
+                    <div style={{
+                      margin: '0 12px 12px',
+                      padding: '12px 16px',
+                      backgroundColor: 'rgba(255, 215, 0, 0.05)',
+                      borderRadius: '10px',
+                      border: '1px solid rgba(255, 215, 0, 0.2)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '10px'
+                    }}>
+                      <div style={{ 
+                        width: 8, 
+                        height: 8, 
+                        borderRadius: '50%', 
+                        backgroundColor: '#FFD700',
+                        animation: 'pulse 2s infinite'
+                      }}></div>
+                      <div>
+                        <div style={{ fontSize: '11px', fontWeight: 600, color: '#FFD700' }}>Awaiting Kickoff</div>
+                        <div style={{ fontSize: '10px', color: '#666' }}>Scoring begins when games start. All picks revealed at kickoff.</div>
                       </div>
                     </div>
 
