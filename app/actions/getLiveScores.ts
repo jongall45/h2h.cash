@@ -142,9 +142,9 @@ export async function resolvePicks(picks: {
     }
 
     if (!found) {
-      const hasLiveGames = games.some(g => g.status.type === 'in')
+      // Player not found in any boxscore - show as PENDING
+      // Without team data, we cannot know which game is theirs
       const allGamesFinished = games.every(g => g.status.type === 'post')
-      const liveGame = games.find(g => g.status.type === 'in')
       
       if (allGamesFinished) {
         return {
@@ -155,18 +155,8 @@ export async function resolvePicks(picks: {
           hit: false,
           gameStatus: 'post' as const
         }
-      } else if (hasLiveGames) {
-        const clock = liveGame ? 'Q' + liveGame.status.period + ' ' + liveGame.status.clock : 'LIVE'
-        return {
-          playerName: pick.player,
-          stat: pick.stat,
-          line: pick.line,
-          currentValue: 0,
-          hit: null,
-          gameStatus: 'in' as const,
-          gameClock: clock
-        }
       } else {
+        // Show PENDING - game likely hasnt started
         return {
           playerName: pick.player,
           stat: pick.stat,
