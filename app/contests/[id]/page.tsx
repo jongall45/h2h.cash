@@ -455,9 +455,10 @@ export default function ContestDetailPage() {
             <div className="bg-white/5 border border-white/5 rounded-3xl overflow-hidden backdrop-blur-sm">
               <div className="grid grid-cols-12 gap-4 px-6 py-4 border-b border-white/5 text-xs font-medium text-white/30 uppercase tracking-wider">
                 <div className="col-span-1">#</div>
-                <div className="col-span-6 md:col-span-7">Player</div>
+                <div className="col-span-5 md:col-span-5">Player</div>
                 <div className="col-span-2 text-center">Hits</div>
-                <div className="col-span-3 md:col-span-2 text-right">Points</div>
+                <div className="col-span-2 text-right">Points</div>
+                <div className="col-span-2 text-right">Prize</div>
               </div>
 
               <div className="divide-y divide-white/5">
@@ -500,7 +501,8 @@ export default function ContestDetailPage() {
                     // Rank: Only show during live/completed, otherwise "—"
                     const currentRank = canRevealAllData ? (index + 1) : '—'
                     const isTop3 = canRevealAllData && (index + 1) <= 3
-                    const isInMoney = isCompleted && (index + 1) <= paidPositions
+                    const positionPrize = payouts[index]?.amount || 0
+                    const isInMoney = positionPrize > 0
                     const prize = isInMoney ? Math.floor(contest.prizePool / paidPositions) : 0
                     
                     // Can view picks: YOUR OWN anytime, others only once games start
@@ -524,7 +526,7 @@ export default function ContestDetailPage() {
                           )}
                         </div>
                         
-                        <div className="col-span-6 md:col-span-7 flex items-center gap-3">
+                        <div className="col-span-5 flex items-center gap-3">
                           <div className={`w-8 h-8 rounded-full bg-gradient-to-br from-white/10 to-transparent border flex items-center justify-center text-xs font-bold ${
                             isOwnEntry ? 'border-[#00FF00]/50 text-[#00FF00]' : 'border-white/10 text-white/70'
                           }`}>
@@ -583,7 +585,7 @@ export default function ContestDetailPage() {
                           )}
                         </div>
 
-                        <div className="col-span-3 md:col-span-2 text-right">
+                        <div className="col-span-2 text-right">
                           {canRevealAllData ? (
                             <>
                               <div className={`text-lg font-bold ${
@@ -611,6 +613,19 @@ export default function ContestDetailPage() {
                           ) : (
                             // Hide opponents
                             <div className="text-lg font-bold text-white/20" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                              —
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Prize Column */}
+                        <div className="col-span-2 text-right">
+                          {positionPrize > 0 ? (
+                            <div className="text-lg font-bold text-[#00FF00]" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                              ${positionPrize}
+                            </div>
+                          ) : (
+                            <div className="text-lg font-bold text-white/20">
                               —
                             </div>
                           )}
