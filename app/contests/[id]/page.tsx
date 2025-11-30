@@ -24,7 +24,6 @@ export default function ContestDetailPage() {
   // Live scoring state
   const [liveStatus, setLiveStatus] = useState<{
     hasGamesStarted: boolean
-    hasGamesCompleted: boolean
     allGamesCompleted: boolean
     inProgressCount: number
   } | null>(null)
