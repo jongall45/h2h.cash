@@ -170,12 +170,19 @@ export async function resolvePicks(picks: {
       }
     }
     
-    // If still not found, try matching by last name only
+    // If still not found, try matching by last name AND first initial
+    // This prevents matching "James Cook" to "Bryan Cook"
     if (!found && pickLastName.length > 2) {
+      const pickFirstInitial = pickPlayerName.charAt(0)
+      
       for (const [name, data] of allPlayers.entries()) {
-        const boxLastName = normalizeName(name).split(' ').pop() || ''
-        if (boxLastName === pickLastName) {
-          console.log(`[Player Match] Matched "${pick.player}" to "${name}" by last name`)
+        const normalizedBoxName = normalizeName(name)
+        const boxLastName = normalizedBoxName.split(' ').pop() || ''
+        const boxFirstInitial = normalizedBoxName.charAt(0)
+        
+        // Must match last name AND first initial
+        if (boxLastName === pickLastName && boxFirstInitial === pickFirstInitial) {
+          console.log(`[Player Match] Matched "${pick.player}" to "${name}" by last name + first initial`)
           found = data
           break
         }
