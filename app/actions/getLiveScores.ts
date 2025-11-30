@@ -130,17 +130,52 @@ export async function resolvePicks(picks: {
     })
   })
 
+  // Helper to normalize player names for matching
+  const normalizeName = (name: string) => {
+    return name
+      .toLowerCase()
+      .replace(/[''`]/g, "'")  // Normalize apostrophes
+      .replace(/[-.]/g, ' ')   // Replace dashes/dots with spaces
+      .replace(/\s+/g, ' ')    // Normalize whitespace
+      .trim()
+  }
+
   // Resolve each pick
   return picks.map(pick => {
-    const pickPlayerName = pick.player.toLowerCase()
+    const pickPlayerName = normalizeName(pick.player)
+    const pickLastName = pickPlayerName.split(' ').pop() || ''
     
     // Try to find player in boxscores
     let found = allPlayers.get(pickPlayerName)
     
+    // If not found, try normalized match
+    if (!found) {
+      for (const [name, data] of allPlayers.entries()) {
+        const normalizedBoxName = normalizeName(name)
+        if (normalizedBoxName === pickPlayerName) {
+          found = data
+          break
+        }
+      }
+    }
+    
     // If not found, try partial match
     if (!found) {
       for (const [name, data] of allPlayers.entries()) {
-        if (name.includes(pickPlayerName) || pickPlayerName.includes(name)) {
+        const normalizedBoxName = normalizeName(name)
+        if (normalizedBoxName.includes(pickPlayerName) || pickPlayerName.includes(normalizedBoxName)) {
+          found = data
+          break
+        }
+      }
+    }
+    
+    // If still not found, try matching by last name only
+    if (!found && pickLastName.length > 2) {
+      for (const [name, data] of allPlayers.entries()) {
+        const boxLastName = normalizeName(name).split(' ').pop() || ''
+        if (boxLastName === pickLastName) {
+          console.log(`[Player Match] Matched "${pick.player}" to "${name}" by last name`)
           found = data
           break
         }
