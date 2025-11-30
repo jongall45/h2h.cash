@@ -29,10 +29,8 @@ export async function getLiveGames(): Promise<LiveGame[]> {
 // Fetch boxscore for a specific game
 export async function getGameBoxscore(gameId: string): Promise<PlayerStats[]> {
   try {
-    const response = await fetch(
-      \`https://site.api.espn.com/apis/site/v2/sports/football/nfl/summary?event=\${gameId}\`,
-      { cache: 'no-store' }
-    )
+    const url = 'https://site.api.espn.com/apis/site/v2/sports/football/nfl/summary?event=' + gameId
+    const response = await fetch(url, { cache: 'no-store' })
     
     if (!response.ok) {
       console.error('ESPN boxscore API error:', response.status)
@@ -92,7 +90,7 @@ export async function resolvePicks(picks: {
   const normalizeName = (name: string) => {
     return name
       .toLowerCase()
-      .replace(/['''\`]/g, "'")
+      .replace(/[''`]/g, "'")
       .replace(/[-.]/g, ' ')
       .replace(/\s+/g, ' ')
       .trim()
@@ -158,6 +156,7 @@ export async function resolvePicks(picks: {
           gameStatus: 'post' as const
         }
       } else if (hasLiveGames) {
+        const clock = liveGame ? 'Q' + liveGame.status.period + ' ' + liveGame.status.clock : 'LIVE'
         return {
           playerName: pick.player,
           stat: pick.stat,
@@ -165,7 +164,7 @@ export async function resolvePicks(picks: {
           currentValue: 0,
           hit: null,
           gameStatus: 'in' as const,
-          gameClock: liveGame ? \`Q\${liveGame.status.period} \${liveGame.status.clock}\` : 'LIVE'
+          gameClock: clock
         }
       } else {
         return {
@@ -193,6 +192,8 @@ export async function resolvePicks(picks: {
       }
     }
 
+    const gameClock = gameStatus.type === 'in' ? 'Q' + gameStatus.period + ' ' + gameStatus.clock : undefined
+
     return {
       playerName: pick.player,
       stat: pick.stat,
@@ -200,7 +201,7 @@ export async function resolvePicks(picks: {
       currentValue,
       hit,
       gameStatus: gameStatus.type,
-      gameClock: gameStatus.type === 'in' ? \`Q\${gameStatus.period} \${gameStatus.clock}\` : undefined
+      gameClock
     }
   })
 }
