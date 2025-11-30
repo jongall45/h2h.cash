@@ -115,16 +115,16 @@ export async function resolvePicks(picks: {
     const hasRelevantStats = (stats: PlayerStats) => {
       if (pickStat === 'PASS') {
         // For passing, player must have passing attempts or yards
-        return (stats.passYds !== undefined && stats.passYds > 0) || 
-               (stats.passAtt !== undefined && stats.passAtt > 0)
+        return (stats.passingYards !== undefined && stats.passingYards > 0) || 
+               (stats.attempts !== undefined && stats.attempts > 0)
       }
       if (pickStat === 'RUSH') {
         // For rushing, player must have rush attempts or yards
-        return (stats.rushYds !== undefined) || (stats.rushAtt !== undefined && stats.rushAtt > 0)
+        return (stats.rushingYards !== undefined) || (stats.attempts !== undefined && stats.attempts > 0)
       }
       if (pickStat === 'REC') {
         // For receiving, player must have receptions or targets
-        return (stats.recYds !== undefined) || (stats.receptions !== undefined)
+        return (stats.receivingYards !== undefined) || (stats.receptions !== undefined)
       }
       return true // Unknown stat type, allow match
     }
