@@ -757,6 +757,15 @@ export default function ContestDetailPage() {
         const picksHidden = !isOwnEntry && (selectedEntry as any)._picksHidden === true
         const entryResults = livePickResults.get(selectedEntry.id)
         
+        // Calculate live hits from results (not from stored database value)
+        const liveHitsCount = entryResults 
+          ? entryResults.filter(r => r.hit === true).length 
+          : 0
+        const livePendingCount = entryResults
+          ? entryResults.filter(r => r.hit === null).length
+          : selectedEntry.picks.length
+        const livePoints = liveScores.get(selectedEntry.id)?.totalPoints ?? 0
+        
         return (
           <div 
             className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
@@ -784,9 +793,12 @@ export default function ContestDetailPage() {
                         'Picks hidden until games begin'
                       ) : canRevealAllData ? (
                         <>
-                          {selectedEntry.hitsCount}/5 Hits • {selectedEntry.totalPoints.toFixed(2)} pts
-                          {selectedEntry.hitsCount > 0 && (
-                            <span className="text-yellow-500 ml-1">({selectedEntry.hitsCount}x multiplier)</span>
+                          {liveHitsCount}/5 Hits • {livePoints.toFixed(2)} pts
+                          {livePendingCount > 0 && (
+                            <span className="text-white/30 ml-1">({livePendingCount} pending)</span>
+                          )}
+                          {liveHitsCount > 0 && (
+                            <span className="text-yellow-500 ml-1">({liveHitsCount}x multiplier)</span>
                           )}
                         </>
                       ) : (
@@ -876,9 +888,9 @@ export default function ContestDetailPage() {
                         {isCompleted ? 'Final Points' : 'Live Points'}
                       </div>
                       <div className="text-2xl font-bold text-white" style={{ fontVariantNumeric: 'tabular-nums' }}>
-                        {selectedEntry.totalPoints.toFixed(2)}
-                        {selectedEntry.hitsCount > 0 && (
-                          <span className="text-yellow-500 text-sm ml-2">({selectedEntry.hitsCount}x)</span>
+                        {livePoints.toFixed(2)}
+                        {liveHitsCount > 0 && (
+                          <span className="text-yellow-500 text-sm ml-2">({liveHitsCount}x)</span>
                         )}
                       </div>
                     </div>
@@ -935,13 +947,21 @@ function PickCard({
     gameClock = liveResult.gameClock || ''
     progressPercent = Math.min((currentValue / pick.line) * 100, 100)
     
+    // Determine status based on live data
+    // IMPORTANT: Only show MISS if game is FINAL (post) and didn't hit
     if (liveResult.hit === true) {
       status = 'hit'
-    } else if (liveResult.hit === false) {
-      status = 'miss'
+    } else if (liveResult.gameStatus === 'pre') {
+      // Game hasn't started - always PENDING
+      status = 'pending'
     } else if (liveResult.gameStatus === 'in') {
+      // Game in progress - LIVE (still has chance to hit)
       status = 'live'
+    } else if (liveResult.hit === false && liveResult.gameStatus === 'post') {
+      // Game is FINAL and didn't hit - MISS
+      status = 'miss'
     }
+    // Otherwise stays as 'pending' (default)
   } else if (contestCompleted) {
     status = pick.hit === true ? 'hit' : pick.hit === false ? 'miss' : 'pending'
     if (status === 'hit') progressPercent = 100
