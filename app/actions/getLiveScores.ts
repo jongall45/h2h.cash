@@ -182,16 +182,22 @@ export async function resolvePicks(picks: {
       }
     }
 
-    // If still not found, check if any game is scheduled
+    // If player not found in any boxscore, they're either:
+    // 1. In a game that hasn't started yet (PENDING)
+    // 2. In a game that's live but they have 0 stats
+    // 3. Not playing today
+    // We should show PENDING (not MISS) until we're sure their game is over
     if (!found) {
-      const anyGamePending = games.some(g => g.status.type === 'pre')
+      // Check if there are any games that haven't finished yet
+      const hasUnfinishedGames = games.some(g => g.status.type === 'pre' || g.status.type === 'in')
+      
       return {
         playerName: pick.player,
         stat: pick.stat,
         line: pick.line,
         currentValue: 0,
-        hit: null, // Pending
-        gameStatus: anyGamePending ? 'pre' : 'post' as const
+        hit: hasUnfinishedGames ? null : false, // PENDING if games remain, MISS only if all games final
+        gameStatus: hasUnfinishedGames ? 'pre' : 'post' as const
       }
     }
 
@@ -200,13 +206,19 @@ export async function resolvePicks(picks: {
     const gameStatus = found.gameStatus
 
     // Determine if hit
+    // IMPORTANT: If they've exceeded the line, it's a HIT even during live games!
+    // The line can't "un-hit" - yards only go up
     let hit: boolean | null = null
     if (gameStatus.type === 'post') {
       // Game is final - definitive result
       hit = currentValue >= pick.line
     } else if (gameStatus.type === 'in') {
-      // Game in progress - still pending but show current value
-      hit = null
+      // Game in progress - if they've already exceeded the line, it's a HIT!
+      if (currentValue >= pick.line) {
+        hit = true  // They've hit! This is locked in.
+      } else {
+        hit = null  // Still pending - could still hit
+      }
     }
 
     return {
