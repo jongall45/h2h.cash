@@ -9,6 +9,7 @@ import { LivePickTracker } from "../../components/LivePickTracker"
 import { TrackedPick } from "../../lib/resolution"
 import { getCurrentUser } from "../../lib/auth"
 import { resolvePicks, getContestLiveStatus, PickResolutionResult } from "../../actions/getLiveScores"
+import { updateContestScores, ScoreUpdateResult } from "../../actions/updateScores"
 
 export default function ContestDetailPage() {
   const params = useParams()
@@ -28,7 +29,9 @@ export default function ContestDetailPage() {
     inProgressCount: number
   } | null>(null)
   const [livePickResults, setLivePickResults] = useState<Map<string, PickResolutionResult[]>>(new Map())
+  const [liveScores, setLiveScores] = useState<Map<string, ScoreUpdateResult>>(new Map())
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null)
+  const [isUpdating, setIsUpdating] = useState(false)
 
   // Get current user for pick visibility
   useEffect(() => {
@@ -41,39 +44,44 @@ export default function ContestDetailPage() {
     loadCurrentUser()
   }, [])
 
-  // Poll for live scoring updates
+  // Poll for live scoring updates - NOW PERSISTS TO DATABASE
   const pollLiveScores = useCallback(async () => {
-    if (!contest) return
+    if (!contest || isUpdating) return
+    
+    setIsUpdating(true)
     
     try {
-      // Get overall contest status
-      const status = await getContestLiveStatus()
-      setLiveStatus(status)
+      // Update all scores in the database AND get results back
+      const result = await updateContestScores(contest.id)
       
-      // Only resolve picks if games have started
-      if (status.hasGamesStarted && contest.entries.length > 0) {
-        // Resolve picks for all entries (in production, you'd batch this)
+      setLiveStatus(result.contestStatus)
+      
+      // Store live scores for display
+      if (result.success && result.updatedEntries.length > 0) {
+        const scoresMap = new Map<string, ScoreUpdateResult>()
         const resultsMap = new Map<string, PickResolutionResult[]>()
         
-        for (const entry of contest.entries) {
-          const picks = entry.picks.map(p => ({
-            player: p.player,
-            stat: p.stat,
-            line: p.line,
-            points: p.points
-          }))
-          
-          const results = await resolvePicks(picks)
-          resultsMap.set(entry.id, results)
+        for (const entry of result.updatedEntries) {
+          scoresMap.set(entry.entryId, entry)
+          resultsMap.set(entry.entryId, entry.pickResults)
         }
         
+        setLiveScores(scoresMap)
         setLivePickResults(resultsMap)
         setLastUpdate(new Date())
+        
+        // Log for debugging
+        console.log(`[Live Scoring] Updated ${result.updatedEntries.length} entries`)
+        if (result.contestStatus.allGamesCompleted) {
+          console.log('[Live Scoring] All games completed - contest finalized!')
+        }
       }
     } catch (error) {
       console.error('Error polling live scores:', error)
+    } finally {
+      setIsUpdating(false)
     }
-  }, [contest])
+  }, [contest, isUpdating])
 
   // Set up polling interval when contest is live
   useEffect(() => {
@@ -104,8 +112,17 @@ export default function ContestDetailPage() {
   useEffect(() => {
     if (!params.id) return
     
+    // Subscribe to real-time updates - when entries change, refetch contest
     const unsubscribe = subscribeToContest(params.id as string, (updatedContest) => {
+      console.log('[Real-time] Contest updated, refreshing leaderboard...')
       setContest(updatedContest)
+      
+      // Clear live scores to force recalculation with new data
+      // This ensures leaderboard reflects database state
+      if (updatedContest.status === 'completed') {
+        setLiveScores(new Map())
+        setLivePickResults(new Map())
+      }
     })
     
     return () => unsubscribe()
@@ -317,13 +334,17 @@ export default function ContestDetailPage() {
                     ({liveStatus.inProgressCount} games in progress)
                   </span>
                 )}
+                {isUpdating && (
+                  <Loader2 size={14} className="animate-spin text-white/40" />
+                )}
               </div>
               <div className="text-sm text-white/50">
                 Full transparency! Everyone's picks are visible. Points update in real-time as player stats change.
               </div>
               {lastUpdate && (
-                <div className="text-xs text-white/30 mt-1">
-                  Last updated: {lastUpdate.toLocaleTimeString()}
+                <div className="text-xs text-white/30 mt-1 flex items-center gap-2">
+                  <span>Last updated: {lastUpdate.toLocaleTimeString()}</span>
+                  <span className="text-[#00FF00]">• Leaderboard updates every 30s</span>
                 </div>
               )}
             </div>
@@ -387,43 +408,40 @@ export default function ContestDetailPage() {
 
               <div className="divide-y divide-white/5">
                 {contest.entries.length > 0 ? (
-                  contest.entries.slice(0, 50).map((entry, index) => {
+                  // SORT BY LIVE POINTS for real-time leaderboard fluctuation
+                  [...contest.entries]
+                    .map(entry => {
+                      const liveScore = liveScores.get(entry.id)
+                      return {
+                        ...entry,
+                        // Use live score if available, otherwise use stored value
+                        displayPoints: canRevealAllData && liveScore ? liveScore.totalPoints : entry.totalPoints,
+                        displayHits: canRevealAllData && liveScore ? liveScore.hitsCount : entry.hitsCount,
+                        liveMultiplier: liveScore?.multiplier ?? 0
+                      }
+                    })
+                    .sort((a, b) => {
+                      // During live games, sort by live points (descending)
+                      if (canRevealAllData) {
+                        return b.displayPoints - a.displayPoints
+                      }
+                      // Pre-game: sort by potential points
+                      return b.totalPoints - a.totalPoints
+                    })
+                    .slice(0, 50)
+                    .map((entry, index) => {
                     // Check if this is the current user's entry
                     const isOwnEntry = currentUserId && entry.oduserId === currentUserId
                     
-                    // PRE-GAME: Everything is 0 and hidden
-                    // LIVE: Show actual ESPN data
-                    let displayPoints = 0
-                    let displayHits = 0
-                    let pending = 5
+                    // Use pre-calculated display values from the sorted map
+                    const displayPoints = entry.displayPoints
+                    const displayHits = entry.displayHits
                     
-                    if (canRevealAllData) {
-                      // Games have started - calculate from ESPN live data
-                      const entryResults = livePickResults.get(entry.id)
-                      
-                      if (entryResults && entryResults.length > 0) {
-                        const liveHits = entryResults.filter(r => r.hit === true).length
-                        pending = entryResults.filter(r => r.hit === null).length
-                        displayHits = liveHits
-                        
-                        // Calculate points: sum of hit picks * multiplier (hits = multiplier)
-                        let basePoints = 0
-                        entryResults.forEach((result, i) => {
-                          if (result.hit === true) {
-                            basePoints += entry.picks[i]?.points ?? 0
-                          }
-                        })
-                        // Multiplier = number of hits
-                        displayPoints = displayHits === 0 ? 0 : basePoints * displayHits
-                      } else if (isCompleted) {
-                        // Contest is complete, use stored final data
-                        displayPoints = entry.totalPoints
-                        displayHits = entry.hitsCount
-                        pending = 0
-                      }
-                      // If live but no ESPN data yet, stays at 0
-                    }
-                    // Pre-game: displayPoints = 0, displayHits = 0 (default values)
+                    // Calculate pending picks
+                    const entryResults = livePickResults.get(entry.id)
+                    const pending = entryResults 
+                      ? entryResults.filter(r => r.hit === null).length 
+                      : (canRevealAllData ? 0 : 5)
                     
                     // Rank: Only show during live/completed, otherwise "—"
                     const currentRank = canRevealAllData ? (index + 1) : '—'
@@ -469,15 +487,15 @@ export default function ContestDetailPage() {
                             )}
                           </div>
                           {/* Show multiplier badge for everyone once games start */}
-                          {canRevealAllData && displayHits > 0 && (
+                          {canRevealAllData && entry.liveMultiplier > 0 && (
                             <span className={`px-1.5 py-0.5 text-[10px] font-bold rounded uppercase tracking-wide border ${
-                              displayHits === 5 
+                              entry.liveMultiplier === 5 
                                 ? 'bg-yellow-500/20 text-yellow-500 border-yellow-500/20' 
-                                : displayHits >= 3 
+                                : entry.liveMultiplier >= 3 
                                   ? 'bg-[#00FF00]/20 text-[#00FF00] border-[#00FF00]/20'
                                   : 'bg-white/10 text-white/60 border-white/10'
                             }`}>
-                              {displayHits}X
+                              {entry.liveMultiplier}X
                             </span>
                           )}
                           {/* Show pending indicator during live */}
