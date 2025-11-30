@@ -4,7 +4,7 @@ import { parseBoxScore, parseGame, PlayerStats, LiveGame, getStatValue } from '.
 
 // HARDCODED PLAYER TEAMS - for players with duplicate names
 const KNOWN_PLAYERS: Record<string, string> = {
-  'josh allen': 'BUF',     // QB Josh Allen, not JAX linebacker
+  'josh allen': 'BUF',       // QB Josh Allen, not JAX linebacker  'christian kirk': 'HOU',   // WR Christian Kirk (traded to Texans 2024)
 }
 
 // Fetch live NFL games from ESPN
