@@ -46,6 +46,7 @@ export async function updateEntryScore(
     // Resolve picks against ESPN live data
     const pickData = picks.map(p => ({
       player: p.player,
+      team: p.team, // Include team for accurate matching
       stat: p.stat,
       line: p.line,
       points: p.points

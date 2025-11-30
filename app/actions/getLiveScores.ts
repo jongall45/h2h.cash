@@ -58,6 +58,7 @@ export interface PickResolutionResult {
 
 export async function resolvePicks(picks: {
   player: string
+  team?: string  // Team abbreviation for accurate matching (e.g., "BUF", "JAX")
   stat: string
   line: number
   points: number
@@ -99,51 +100,64 @@ export async function resolvePicks(picks: {
   return picks.map(pick => {
     const pickPlayerName = normalizeName(pick.player)
     const pickLastName = pickPlayerName.split(' ').pop() || ''
+    const pickTeam = pick.team?.toUpperCase() // Team from pick data
+    
+    // Helper to verify team matches (returns true if teams match or no team data)
+    const teamMatches = (playerTeam: string | undefined) => {
+      if (!pickTeam) return true // No team in pick, allow match
+      if (!playerTeam) return true // No team in data, allow match
+      return pickTeam === playerTeam.toUpperCase()
+    }
     
     let found = allPlayers.get(pickPlayerName)
     
+    // Verify team for exact match - critical for names like "Josh Allen"
+    if (found && !teamMatches(found.stats.teamAbbr)) {
+      console.log('[Team Mismatch] ' + pick.player + ' found but wrong team: ' + found.stats.teamAbbr + ' vs ' + pickTeam)
+      found = undefined // Wrong team, keep looking
+    }
+    
+    // Try normalized match with team verification
     if (!found) {
       for (const [name, data] of allPlayers.entries()) {
         const normalizedBoxName = normalizeName(name)
-        if (normalizedBoxName === pickPlayerName) {
+        if (normalizedBoxName === pickPlayerName && teamMatches(data.stats.teamAbbr)) {
           found = data
           break
         }
       }
     }
     
+    // Try partial match with team verification
     if (!found) {
       for (const [name, data] of allPlayers.entries()) {
         const normalizedBoxName = normalizeName(name)
-        if (normalizedBoxName.includes(pickPlayerName) || pickPlayerName.includes(normalizedBoxName)) {
+        if ((normalizedBoxName.includes(pickPlayerName) || pickPlayerName.includes(normalizedBoxName)) 
+            && teamMatches(data.stats.teamAbbr)) {
           found = data
           break
         }
       }
     }
 
+    // Last resort: last name + first initial with team verification
     if (!found && pickLastName.length > 2) {
       const pickFirstInitial = pickPlayerName.charAt(0)
-      const pickTeam = (pick as any).team?.toUpperCase()
       
       for (const [name, data] of allPlayers.entries()) {
         const normalizedBoxName = normalizeName(name)
         const boxLastName = normalizedBoxName.split(' ').pop() || ''
         const boxFirstInitial = normalizedBoxName.charAt(0)
         
-        if (boxLastName === pickLastName && boxFirstInitial === pickFirstInitial) {
-          if (pickTeam && data.stats.teamAbbr && pickTeam !== data.stats.teamAbbr) {
-            continue
-          }
+        if (boxLastName === pickLastName && boxFirstInitial === pickFirstInitial && teamMatches(data.stats.teamAbbr)) {
           found = data
           break
         }
       }
     }
 
+    // Player not found - show as PENDING (game likely hasn't started)
     if (!found) {
-      // Player not found in any boxscore - show as PENDING
-      // Without team data, we cannot know which game is theirs
       const allGamesFinished = games.every(g => g.status.type === 'post')
       
       if (allGamesFinished) {
@@ -156,7 +170,6 @@ export async function resolvePicks(picks: {
           gameStatus: 'post' as const
         }
       } else {
-        // Show PENDING - game likely hasnt started
         return {
           playerName: pick.player,
           stat: pick.stat,

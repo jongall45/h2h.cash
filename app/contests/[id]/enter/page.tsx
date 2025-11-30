@@ -165,6 +165,7 @@ export default function ContestEntryPage() {
     
     const entryPicks: EntryPick[] = picks.map(p => ({
       player: p.player,
+      team: p.playerTeam, // Include team for accurate player matching
       stat: p.stat,
       line: p.line,
       points: p.points
