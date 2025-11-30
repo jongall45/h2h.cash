@@ -17,6 +17,285 @@ import { OpponentReveal } from "./components/OpponentReveal"
 import { MatchupCard } from "./components/ui/SpotlightCard"
 import { UserHeader } from "./components/UserHeader"
 
+// How to Play Modal Component
+function HowToPlayModal({ onClose }: { onClose: () => void }) {
+  const [showStrategy, setShowStrategy] = useState(false)
+  
+  const steps = [
+    { num: 1, title: "Enter a Tournament", desc: "Join a tournament and select from available NFL matchups" },
+    { num: 2, title: "Draft 5 Props", desc: "Pick 5 player prop OVERs - passing yards, receiving yards, rushing, etc." },
+    { num: 3, title: "Set Your Lines", desc: "Slide to adjust risk:", hasSlider: true },
+    { num: 4, title: "Hits = Multiplier", desc: "Props that hit (player goes OVER) earn points. More hits = bigger multiplier.", hasTable: true },
+    { num: 5, title: "Top Score Wins", desc: "Base points × multiplier = final score. Highest score takes the pot!" },
+  ]
+  
+  const multipliers = [
+    { hits: "5/5", mult: "5x", best: true },
+    { hits: "4/5", mult: "4x" },
+    { hits: "3/5", mult: "3x" },
+    { hits: "2/5", mult: "2x" },
+    { hits: "1/5", mult: "1x" },
+    { hits: "0/5", mult: "0 pts", worst: true },
+  ]
+
+  return (
+    <div 
+      style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: 9999,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: 'rgba(0, 0, 0, 0.85)',
+        backdropFilter: 'blur(8px)',
+        padding: '16px'
+      }}
+      onClick={onClose}
+    >
+      <div 
+        style={{
+          backgroundColor: '#0a0a0a',
+          border: '1px solid #222',
+          borderRadius: '20px',
+          maxWidth: '420px',
+          width: '100%',
+          maxHeight: '90vh',
+          overflow: 'hidden',
+          boxShadow: '0 20px 60px rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          flexDirection: 'column'
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div style={{ 
+          padding: '20px 24px', 
+          borderBottom: '1px solid #1a1a1a',
+          display: 'flex', 
+          alignItems: 'center', 
+          justifyContent: 'space-between',
+          flexShrink: 0
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div style={{ 
+              width: '32px', 
+              height: '32px', 
+              borderRadius: '50%', 
+              backgroundColor: 'rgba(0, 255, 0, 0.15)', 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'center' 
+            }}>
+              <span style={{ fontSize: '16px' }}>🏈</span>
+            </div>
+            <h3 style={{ fontSize: '18px', fontWeight: 600, color: '#fff', margin: 0 }}>How to Play</h3>
+          </div>
+          <button 
+            onClick={onClose} 
+            style={{
+              background: 'rgba(255,255,255,0.05)',
+              border: 'none',
+              borderRadius: '8px',
+              color: '#666',
+              cursor: 'pointer',
+              padding: '8px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M18 6L6 18M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        {/* Scrollable Content */}
+        <div style={{ overflowY: 'auto', flex: 1, padding: '20px 24px' }}>
+          {/* Intro */}
+          <p style={{ fontSize: '13px', color: '#888', marginBottom: '20px', lineHeight: 1.5 }}>
+            An NFL props tournament where you compete by drafting player prop overs. Set your lines, hit your picks, win the pot.
+          </p>
+
+          {/* Steps */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            {steps.map((step) => (
+              <div key={step.num}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+                  <div style={{ 
+                    width: '28px', 
+                    height: '28px', 
+                    borderRadius: '50%', 
+                    backgroundColor: 'rgba(0, 255, 0, 0.15)', 
+                    border: '1px solid rgba(0, 255, 0, 0.3)', 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'center', 
+                    flexShrink: 0 
+                  }}>
+                    <span style={{ fontSize: '12px', fontWeight: 700, color: '#00FF00' }}>{step.num}</span>
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: '14px', fontWeight: 600, color: '#fff', marginBottom: '4px' }}>{step.title}</div>
+                    <div style={{ fontSize: '12px', color: '#777', lineHeight: 1.4 }}>{step.desc}</div>
+                    
+                    {/* Slider Visual for Step 3 */}
+                    {step.hasSlider && (
+                      <div style={{ marginTop: '10px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                          <span style={{ fontSize: '11px', fontWeight: 600, color: '#22c55e' }}>SAFE</span>
+                          <span style={{ fontSize: '11px', fontWeight: 600, color: '#ef4444' }}>MAX</span>
+                        </div>
+                        <div style={{ 
+                          height: '8px', 
+                          borderRadius: '4px', 
+                          background: 'linear-gradient(90deg, #22c55e 0%, #eab308 50%, #ef4444 100%)',
+                          opacity: 0.8
+                        }} />
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '6px' }}>
+                          <span style={{ fontSize: '10px', color: '#666' }}>Easier to hit, fewer pts</span>
+                          <span style={{ fontSize: '10px', color: '#666' }}>Harder to hit, more pts</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                
+                {/* Multiplier Table for Step 4 */}
+                {step.hasTable && (
+                  <div style={{ 
+                    marginTop: '12px', 
+                    marginLeft: '40px',
+                    display: 'grid', 
+                    gridTemplateColumns: 'repeat(3, 1fr)', 
+                    gap: '6px' 
+                  }}>
+                    {multipliers.map((m) => (
+                      <div 
+                        key={m.hits}
+                        style={{ 
+                          padding: '8px 6px',
+                          borderRadius: '8px',
+                          textAlign: 'center',
+                          backgroundColor: m.best ? 'rgba(0, 255, 0, 0.1)' : m.worst ? 'rgba(239, 68, 68, 0.1)' : '#111',
+                          border: m.best ? '1px solid rgba(0, 255, 0, 0.3)' : m.worst ? '1px solid rgba(239, 68, 68, 0.3)' : '1px solid #1a1a1a'
+                        }}
+                      >
+                        <div style={{ fontSize: '10px', color: m.best ? '#22c55e' : m.worst ? '#ef4444' : '#888', fontWeight: 500 }}>
+                          {m.hits}
+                        </div>
+                        <div style={{ fontSize: '13px', fontWeight: 700, color: m.best ? '#22c55e' : m.worst ? '#ef4444' : '#fff' }}>
+                          {m.mult}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {/* Warning Callout */}
+          <div style={{
+            marginTop: '20px',
+            padding: '12px 14px',
+            backgroundColor: 'rgba(239, 68, 68, 0.08)',
+            border: '1px solid rgba(239, 68, 68, 0.25)',
+            borderRadius: '12px'
+          }}>
+            <p style={{ fontSize: '11px', color: '#f87171', margin: 0, lineHeight: 1.5, textAlign: 'center' }}>
+              <strong>⚠️ Key Rule:</strong> Missed picks = 0 points. A 20-point MAX pick that misses is worth less than a 2-point SAFE pick that hits!
+            </p>
+          </div>
+
+          {/* Strategy Section - Collapsible */}
+          <div style={{ marginTop: '16px' }}>
+            <button
+              onClick={() => setShowStrategy(!showStrategy)}
+              style={{
+                width: '100%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '12px 14px',
+                backgroundColor: '#111',
+                border: '1px solid #222',
+                borderRadius: '12px',
+                cursor: 'pointer',
+                color: '#fff'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span>💡</span>
+                <span style={{ fontSize: '13px', fontWeight: 500 }}>Strategy Tips</span>
+              </div>
+              <svg 
+                width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#666" strokeWidth="2"
+                style={{ transform: showStrategy ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}
+              >
+                <path d="M6 9l6 6 6-6" />
+              </svg>
+            </button>
+            
+            {showStrategy && (
+              <div style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <div style={{ padding: '12px', backgroundColor: '#111', borderRadius: '10px', border: '1px solid #1a1a1a' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+                    <span>🛡️</span>
+                    <span style={{ fontSize: '12px', fontWeight: 600, color: '#22c55e' }}>Conservative</span>
+                  </div>
+                  <p style={{ fontSize: '11px', color: '#888', margin: 0, lineHeight: 1.4 }}>
+                    Pick safe lines on heavy favorites. Lower points but more likely to hit 5/5 for the 5x multiplier.
+                  </p>
+                </div>
+                <div style={{ padding: '12px', backgroundColor: '#111', borderRadius: '10px', border: '1px solid #1a1a1a' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+                    <span>🔥</span>
+                    <span style={{ fontSize: '12px', fontWeight: 600, color: '#ef4444' }}>Aggressive</span>
+                  </div>
+                  <p style={{ fontSize: '11px', color: '#888', margin: 0, lineHeight: 1.4 }}>
+                    Push lines to MAX for huge point totals. Risk 0 points, but one big hit can win it all.
+                  </p>
+                </div>
+                <div style={{ padding: '12px', backgroundColor: '#111', borderRadius: '10px', border: '1px solid #1a1a1a' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+                    <span>⚖️</span>
+                    <span style={{ fontSize: '12px', fontWeight: 600, color: '#eab308' }}>Balanced</span>
+                  </div>
+                  <p style={{ fontSize: '11px', color: '#888', margin: 0, lineHeight: 1.4 }}>
+                    Mix 2-3 safe picks with 2-3 aggressive ones. Guarantee some multiplier while chasing upside.
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Footer Button */}
+        <div style={{ padding: '16px 24px', borderTop: '1px solid #1a1a1a', flexShrink: 0 }}>
+          <button 
+            onClick={onClose}
+            style={{
+              width: '100%',
+              padding: '14px',
+              background: 'linear-gradient(90deg, #00FF00, #00DD00)',
+              border: 'none',
+              borderRadius: '12px',
+              color: '#000',
+              fontSize: '14px',
+              fontWeight: 600,
+              cursor: 'pointer'
+            }}
+          >
+            Got It
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // All 32 NFL team abbreviations for logos
 const NFL_TEAMS = [
   'ari', 'atl', 'bal', 'buf', 'car', 'chi', 'cin', 'cle',
@@ -513,124 +792,7 @@ export default function Home() {
 
           {/* How to Play Modal */}
           {showExplainer && (
-            <div 
-              style={{
-                position: 'fixed',
-                inset: 0,
-                zIndex: 9999,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                backgroundColor: 'rgba(0, 0, 0, 0.85)',
-                backdropFilter: 'blur(8px)',
-                padding: '20px'
-              }}
-              onClick={() => setShowExplainer(false)}
-            >
-              <div 
-                style={{
-                  backgroundColor: '#111',
-                  border: '1px solid #222',
-                  borderRadius: '20px',
-                  padding: '28px',
-                  maxWidth: '380px',
-                  width: '100%',
-                  boxShadow: '0 20px 60px rgba(0, 0, 0, 0.5)'
-                }}
-                onClick={(e) => e.stopPropagation()}
-              >
-                {/* Header */}
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
-                  <h3 style={{ fontSize: '20px', fontWeight: 500, color: '#fff', margin: 0 }}>How to Play</h3>
-                  <button 
-                    onClick={() => setShowExplainer(false)} 
-                    style={{
-                      background: 'none',
-                      border: 'none',
-                      color: '#555',
-                      cursor: 'pointer',
-                      padding: '4px'
-                    }}
-                  >
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M18 6L6 18M6 6l12 12" />
-                    </svg>
-                  </button>
-                </div>
-
-                {/* Steps */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
-                    <div style={{ width: '24px', height: '24px', borderRadius: '50%', backgroundColor: 'rgba(0, 255, 0, 0.15)', border: '1px solid rgba(0, 255, 0, 0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                      <span style={{ fontSize: '11px', fontWeight: 600, color: '#00FF00' }}>1</span>
-                    </div>
-                    <div>
-                      <div style={{ fontSize: '14px', fontWeight: 500, color: '#fff', marginBottom: '2px' }}>Find a Match</div>
-                      <div style={{ fontSize: '12px', color: '#666' }}>Get randomly paired with an opponent for a head-to-head draft</div>
-                    </div>
-                  </div>
-
-                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
-                    <div style={{ width: '24px', height: '24px', borderRadius: '50%', backgroundColor: 'rgba(0, 255, 0, 0.15)', border: '1px solid rgba(0, 255, 0, 0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                      <span style={{ fontSize: '11px', fontWeight: 600, color: '#00FF00' }}>2</span>
-                    </div>
-                    <div>
-                      <div style={{ fontSize: '14px', fontWeight: 500, color: '#fff', marginBottom: '2px' }}>Draft 5 Props</div>
-                      <div style={{ fontSize: '12px', color: '#666' }}>Select player props and adjust the line - go safe or risky</div>
-                    </div>
-                  </div>
-
-                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
-                    <div style={{ width: '24px', height: '24px', borderRadius: '50%', backgroundColor: 'rgba(0, 255, 0, 0.15)', border: '1px solid rgba(0, 255, 0, 0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                      <span style={{ fontSize: '11px', fontWeight: 600, color: '#00FF00' }}>3</span>
-                    </div>
-                    <div>
-                      <div style={{ fontSize: '14px', fontWeight: 500, color: '#fff', marginBottom: '2px' }}>Earn Points</div>
-                      <div style={{ fontSize: '12px', color: '#666' }}>Each prop hit earns points - you don't need to hit every leg</div>
-                    </div>
-                  </div>
-
-                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
-                    <div style={{ width: '24px', height: '24px', borderRadius: '50%', backgroundColor: 'rgba(255, 107, 53, 0.15)', border: '1px solid rgba(255, 107, 53, 0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                      <span style={{ fontSize: '11px', fontWeight: 600, color: '#ff6b35' }}>4</span>
-                    </div>
-                    <div>
-                      <div style={{ fontSize: '14px', fontWeight: 500, color: '#fff', marginBottom: '2px' }}>Double Down</div>
-                      <div style={{ fontSize: '12px', color: '#666' }}>Risk half your entry for an 8x multiplier on winnings</div>
-                    </div>
-                  </div>
-
-                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
-                    <div style={{ width: '24px', height: '24px', borderRadius: '50%', backgroundColor: 'rgba(0, 255, 0, 0.15)', border: '1px solid rgba(0, 255, 0, 0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                      <span style={{ fontSize: '11px', fontWeight: 600, color: '#00FF00' }}>5</span>
-                    </div>
-                    <div>
-                      <div style={{ fontSize: '14px', fontWeight: 500, color: '#fff', marginBottom: '2px' }}>Beat Your Opponent</div>
-                      <div style={{ fontSize: '12px', color: '#666' }}>Outscore them to win cash - it's that simple</div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Close Button */}
-                <button 
-                  onClick={() => setShowExplainer(false)}
-                  style={{
-                    width: '100%',
-                    marginTop: '24px',
-                    padding: '14px',
-                    background: 'linear-gradient(90deg, #00FF00, #00DD00)',
-                    border: 'none',
-                    borderRadius: '12px',
-                    color: '#000',
-                    fontSize: '14px',
-                    fontWeight: 600,
-                    cursor: 'pointer'
-                  }}
-                >
-                  Got It
-                </button>
-              </div>
-            </div>
+            <HowToPlayModal onClose={() => setShowExplainer(false)} />
           )}
         </div>
       )}
