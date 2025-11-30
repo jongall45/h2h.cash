@@ -2,93 +2,57 @@
 
 import { parseBoxScore, parseGame, PlayerStats, LiveGame, getStatValue } from '../lib/liveStats'
 
-// Cache for ESPN data (server-side)
-let scoreCache: {
-  games: LiveGame[]
-  boxscores: Map<string, PlayerStats[]>
-  lastFetch: number
-} = {
-  games: [],
-  boxscores: new Map(),
-  lastFetch: 0
-}
-
-const CACHE_TTL = 10000 // 10 seconds - faster updates during live games
+// NO IN-MEMORY CACHE - Vercel serverless instances don't share memory
+// Always fetch fresh from ESPN API for consistent data
 
 // Fetch live NFL games from ESPN
 export async function getLiveGames(): Promise<LiveGame[]> {
-  const now = Date.now()
-  
-  // Return cached if fresh enough
-  if (scoreCache.games.length > 0 && now - scoreCache.lastFetch < CACHE_TTL) {
-    return scoreCache.games
-  }
-
   try {
     const response = await fetch(
       'https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard',
-      { cache: 'no-store' } // Always fetch fresh data during live games
+      { cache: 'no-store' }
     )
     
     if (!response.ok) {
       console.error('ESPN API error:', response.status)
-      return scoreCache.games // Return stale cache on error
+      return []
     }
 
     const data = await response.json()
-    const games = (data.events || []).map(parseGame)
-    
-    scoreCache.games = games
-    scoreCache.lastFetch = now
-    
-    return games
+    return (data.events || []).map(parseGame)
   } catch (error) {
     console.error('Error fetching live games:', error)
-    return scoreCache.games
+    return []
   }
 }
 
 // Fetch boxscore for a specific game
 export async function getGameBoxscore(gameId: string): Promise<PlayerStats[]> {
-  const cached = scoreCache.boxscores.get(gameId)
-  const now = Date.now()
-  
-  // Return cached if fresh enough
-  if (cached && now - scoreCache.lastFetch < CACHE_TTL) {
-    return cached
-  }
-
   try {
     const response = await fetch(
-      `https://site.api.espn.com/apis/site/v2/sports/football/nfl/summary?event=${gameId}`,
-      { cache: 'no-store' } // Always fetch fresh data during live games
+      \`https://site.api.espn.com/apis/site/v2/sports/football/nfl/summary?event=\${gameId}\`,
+      { cache: 'no-store' }
     )
     
     if (!response.ok) {
       console.error('ESPN boxscore API error:', response.status)
-      return cached || []
+      return []
     }
 
     const data = await response.json()
-    const players = parseBoxScore(data.boxscore)
-    
-    scoreCache.boxscores.set(gameId, players)
-    scoreCache.lastFetch = now
-    
-    return players
+    return parseBoxScore(data.boxscore)
   } catch (error) {
     console.error('Error fetching boxscore:', error)
-    return cached || []
+    return []
   }
 }
 
-// Resolve a pick against live data
 export interface PickResolutionResult {
   playerName: string
   stat: string
   line: number
   currentValue: number
-  hit: boolean | null // null = pending/in progress
+  hit: boolean | null
   gameStatus: 'pre' | 'in' | 'post'
   gameClock?: string
   projectedValue?: number
@@ -100,15 +64,12 @@ export async function resolvePicks(picks: {
   line: number
   points: number
 }[]): Promise<PickResolutionResult[]> {
-  // Get all live games
   const games = await getLiveGames()
   
-  // Find games that are in progress or completed
   const activeGameIds = games
     .filter(g => g.status.type !== 'pre')
     .map(g => g.id)
 
-  // Fetch boxscores for active games
   const boxscores = await Promise.all(
     activeGameIds.map(async (id) => ({
       gameId: id,
@@ -116,7 +77,6 @@ export async function resolvePicks(picks: {
     }))
   )
 
-  // Flatten all player stats
   const allPlayers: Map<string, { stats: PlayerStats; gameStatus: LiveGame['status'] }> = new Map()
   
   boxscores.forEach(({ gameId, players }) => {
@@ -124,31 +84,26 @@ export async function resolvePicks(picks: {
     if (!game) return
     
     players.forEach(player => {
-      // Use lowercase name for matching
       const key = player.playerName.toLowerCase()
       allPlayers.set(key, { stats: player, gameStatus: game.status })
     })
   })
 
-  // Helper to normalize player names for matching
   const normalizeName = (name: string) => {
     return name
       .toLowerCase()
-      .replace(/[''`]/g, "'")  // Normalize apostrophes
-      .replace(/[-.]/g, ' ')   // Replace dashes/dots with spaces
-      .replace(/\s+/g, ' ')    // Normalize whitespace
+      .replace(/['''\`]/g, "'")
+      .replace(/[-.]/g, ' ')
+      .replace(/\s+/g, ' ')
       .trim()
   }
 
-  // Resolve each pick
   return picks.map(pick => {
     const pickPlayerName = normalizeName(pick.player)
     const pickLastName = pickPlayerName.split(' ').pop() || ''
     
-    // Try to find player in boxscores
     let found = allPlayers.get(pickPlayerName)
     
-    // If not found, try normalized match
     if (!found) {
       for (const [name, data] of allPlayers.entries()) {
         const normalizedBoxName = normalizeName(name)
@@ -159,7 +114,6 @@ export async function resolvePicks(picks: {
       }
     }
     
-    // If not found, try partial match
     if (!found) {
       for (const [name, data] of allPlayers.entries()) {
         const normalizedBoxName = normalizeName(name)
@@ -170,61 +124,72 @@ export async function resolvePicks(picks: {
       }
     }
 
-    // If still not found, try matching by last name AND first initial
-    // This prevents matching "James Cook" to "Bryan Cook"
     if (!found && pickLastName.length > 2) {
       const pickFirstInitial = pickPlayerName.charAt(0)
+      const pickTeam = (pick as any).team?.toUpperCase()
       
       for (const [name, data] of allPlayers.entries()) {
         const normalizedBoxName = normalizeName(name)
         const boxLastName = normalizedBoxName.split(' ').pop() || ''
         const boxFirstInitial = normalizedBoxName.charAt(0)
         
-        // Must match last name AND first initial
         if (boxLastName === pickLastName && boxFirstInitial === pickFirstInitial) {
-          console.log(`[Player Match] Matched "${pick.player}" to "${name}" by last name + first initial`)
+          if (pickTeam && data.stats.teamAbbr && pickTeam !== data.stats.teamAbbr) {
+            continue
+          }
           found = data
           break
         }
       }
     }
 
-    // If player not found in any boxscore, they're either:
-    // 1. In a game that hasn't started yet (PENDING)
-    // 2. In a game that's live but they have 0 stats
-    // 3. Not playing today
-    // We should show PENDING (not MISS) until we're sure their game is over
     if (!found) {
-      // Check if there are any games that haven't finished yet
-      const hasUnfinishedGames = games.some(g => g.status.type === 'pre' || g.status.type === 'in')
+      const hasLiveGames = games.some(g => g.status.type === 'in')
+      const allGamesFinished = games.every(g => g.status.type === 'post')
+      const liveGame = games.find(g => g.status.type === 'in')
       
-      return {
-        playerName: pick.player,
-        stat: pick.stat,
-        line: pick.line,
-        currentValue: 0,
-        hit: hasUnfinishedGames ? null : false, // PENDING if games remain, MISS only if all games final
-        gameStatus: hasUnfinishedGames ? 'pre' : 'post' as const
+      if (allGamesFinished) {
+        return {
+          playerName: pick.player,
+          stat: pick.stat,
+          line: pick.line,
+          currentValue: 0,
+          hit: false,
+          gameStatus: 'post' as const
+        }
+      } else if (hasLiveGames) {
+        return {
+          playerName: pick.player,
+          stat: pick.stat,
+          line: pick.line,
+          currentValue: 0,
+          hit: null,
+          gameStatus: 'in' as const,
+          gameClock: liveGame ? \`Q\${liveGame.status.period} \${liveGame.status.clock}\` : 'LIVE'
+        }
+      } else {
+        return {
+          playerName: pick.player,
+          stat: pick.stat,
+          line: pick.line,
+          currentValue: 0,
+          hit: null,
+          gameStatus: 'pre' as const
+        }
       }
     }
 
-    // Get the stat value
     const currentValue = getStatValue(found.stats, pick.stat)
     const gameStatus = found.gameStatus
 
-    // Determine if hit
-    // IMPORTANT: If they've exceeded the line, it's a HIT even during live games!
-    // The line can't "un-hit" - yards only go up
     let hit: boolean | null = null
     if (gameStatus.type === 'post') {
-      // Game is final - definitive result
       hit = currentValue >= pick.line
     } else if (gameStatus.type === 'in') {
-      // Game in progress - if they've already exceeded the line, it's a HIT!
       if (currentValue >= pick.line) {
-        hit = true  // They've hit! This is locked in.
+        hit = true
       } else {
-        hit = null  // Still pending - could still hit
+        hit = null
       }
     }
 
@@ -235,12 +200,11 @@ export async function resolvePicks(picks: {
       currentValue,
       hit,
       gameStatus: gameStatus.type,
-      gameClock: gameStatus.type === 'in' ? `Q${gameStatus.period} ${gameStatus.clock}` : undefined
+      gameClock: gameStatus.type === 'in' ? \`Q\${gameStatus.period} \${gameStatus.clock}\` : undefined
     }
   })
 }
 
-// Get contest status based on game times
 export async function getContestLiveStatus(): Promise<{
   hasGamesStarted: boolean
   hasGamesCompleted: boolean
@@ -264,4 +228,3 @@ export async function getContestLiveStatus(): Promise<{
     pendingCount: pending
   }
 }
-
