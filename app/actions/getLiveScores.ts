@@ -3,13 +3,11 @@
 import { parseBoxScore, parseGame, PlayerStats, LiveGame, getStatValue } from '../lib/liveStats'
 
 // HARDCODED PLAYER TEAMS - for players with duplicate names
-// Props are only for offensive players, so we hardcode the offensive player's team
 const KNOWN_PLAYERS: Record<string, string> = {
-  'josh allen': 'BUF',     // QB Josh Allen, not JAX linebacker  'christian kirk': 'JAX', // WR Christian Kirk on Texans
-  // Add more if needed in the future
+  'josh allen': 'BUF',     // QB Josh Allen, not JAX linebacker
 }
 
-// Fetch live NFL games from ESPN - no caching
+// Fetch live NFL games from ESPN
 export async function getLiveGames(): Promise<LiveGame[]> {
   try {
     const response = await fetch(
@@ -32,7 +30,9 @@ export async function getGameBoxscore(gameId: string): Promise<PlayerStats[]> {
     const response = await fetch(url, { cache: 'no-store' })
     if (!response.ok) return []
     const data = await response.json()
-    return parseBoxScore(data.boxscore)
+    const players = parseBoxScore(data.boxscore)
+    console.log('[Boxscore] Game ' + gameId + ': ' + players.length + ' players')
+    return players
   } catch (error) {
     console.error('Error fetching boxscore:', error)
     return []
@@ -57,6 +57,7 @@ export async function resolvePicks(picks: {
   points: number
 }[]): Promise<PickResolutionResult[]> {
   const games = await getLiveGames()
+  console.log('[Games] Total: ' + games.length + ', Active: ' + games.filter(g => g.status.type !== 'pre').length)
   
   const activeGameIds = games
     .filter(g => g.status.type !== 'pre')
@@ -69,7 +70,7 @@ export async function resolvePicks(picks: {
     }))
   )
 
-  // Build player map with game info
+  // Build player map
   const allPlayers: Map<string, { stats: PlayerStats; gameStatus: LiveGame['status'] }> = new Map()
   
   boxscores.forEach(({ gameId, players }) => {
@@ -80,6 +81,8 @@ export async function resolvePicks(picks: {
       allPlayers.set(key, { stats: player, gameStatus: game.status })
     })
   })
+  
+  console.log('[Players] Total in boxscores: ' + allPlayers.size)
 
   const normalizeName = (name: string) => {
     return name.toLowerCase().replace(/[''`]/g, "'").replace(/[-.]/g, ' ').replace(/\s+/g, ' ').trim()
@@ -87,43 +90,38 @@ export async function resolvePicks(picks: {
 
   return picks.map(pick => {
     const pickPlayerName = normalizeName(pick.player)
-    
-    // Get the required team - from pick data OR hardcoded known players
     const knownTeam = KNOWN_PLAYERS[pickPlayerName]
     const requiredTeam = pick.team?.toUpperCase() || knownTeam
     
-    // Helper to check if team matches (if we have a required team)
     const teamMatches = (playerTeam: string | undefined): boolean => {
-      if (!requiredTeam) return true // No team requirement
-      if (!playerTeam) return true // No team data on player
+      if (!requiredTeam) return true
+      if (!playerTeam) return true
       return playerTeam.toUpperCase() === requiredTeam
     }
     
-    // Search for player
     let found: { stats: PlayerStats; gameStatus: LiveGame['status'] } | undefined
     
-    // Try exact name match
+    // Exact match
     const exactMatch = allPlayers.get(pickPlayerName)
     if (exactMatch && teamMatches(exactMatch.stats.teamAbbr)) {
       found = exactMatch
+      console.log('[Match] EXACT: ' + pick.player + ' -> ' + exactMatch.stats.playerName + ' (' + exactMatch.stats.teamAbbr + ')')
     }
     
-    // Try normalized/partial matches
+    // Partial match
     if (!found) {
       for (const [name, data] of allPlayers.entries()) {
         const normalizedName = normalizeName(name)
-        const nameMatches = normalizedName === pickPlayerName || 
-                           normalizedName.includes(pickPlayerName) || 
-                           pickPlayerName.includes(normalizedName)
-        
-        if (nameMatches && teamMatches(data.stats.teamAbbr)) {
+        if ((normalizedName === pickPlayerName || normalizedName.includes(pickPlayerName) || pickPlayerName.includes(normalizedName)) 
+            && teamMatches(data.stats.teamAbbr)) {
           found = data
+          console.log('[Match] PARTIAL: ' + pick.player + ' -> ' + data.stats.playerName + ' (' + data.stats.teamAbbr + ')')
           break
         }
       }
     }
     
-    // Try last name + first initial
+    // Last name + first initial
     if (!found) {
       const pickLastName = pickPlayerName.split(' ').pop() || ''
       const pickFirstInitial = pickPlayerName.charAt(0)
@@ -136,14 +134,15 @@ export async function resolvePicks(picks: {
           
           if (lastName === pickLastName && firstInitial === pickFirstInitial && teamMatches(data.stats.teamAbbr)) {
             found = data
+            console.log('[Match] LASTNAME: ' + pick.player + ' -> ' + data.stats.playerName + ' (' + data.stats.teamAbbr + ')')
             break
           }
         }
       }
     }
 
-    // NOT FOUND = PENDING
     if (!found) {
+      console.log('[No Match] ' + pick.player + ' - not found in ' + allPlayers.size + ' players')
       const allGamesFinished = games.every(g => g.status.type === 'post')
       return {
         playerName: pick.player,
@@ -155,7 +154,6 @@ export async function resolvePicks(picks: {
       }
     }
 
-    // FOUND - get current stats
     const currentValue = getStatValue(found.stats, pick.stat)
     const gameStatus = found.gameStatus
 
