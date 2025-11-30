@@ -13,7 +13,7 @@ let scoreCache: {
   lastFetch: 0
 }
 
-const CACHE_TTL = 30000 // 30 seconds
+const CACHE_TTL = 10000 // 10 seconds - faster updates during live games
 
 // Fetch live NFL games from ESPN
 export async function getLiveGames(): Promise<LiveGame[]> {
@@ -27,7 +27,7 @@ export async function getLiveGames(): Promise<LiveGame[]> {
   try {
     const response = await fetch(
       'https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard',
-      { next: { revalidate: 30 } }
+      { cache: 'no-store' } // Always fetch fresh data during live games
     )
     
     if (!response.ok) {
@@ -61,7 +61,7 @@ export async function getGameBoxscore(gameId: string): Promise<PlayerStats[]> {
   try {
     const response = await fetch(
       `https://site.api.espn.com/apis/site/v2/sports/football/nfl/summary?event=${gameId}`,
-      { next: { revalidate: 30 } }
+      { cache: 'no-store' } // Always fetch fresh data during live games
     )
     
     if (!response.ok) {

@@ -130,8 +130,8 @@ export default function ContestDetailPage() {
     // Initial poll
     pollLiveScores()
     
-    // Poll every 30 seconds during live games
-    const interval = setInterval(pollLiveScores, 30000)
+    // Poll every 15 seconds during live games (faster updates!)
+    const interval = setInterval(pollLiveScores, 15000)
     
     return () => clearInterval(interval)
   }, [contest?.status, pollLiveScores])
@@ -391,7 +391,14 @@ export default function ContestDetailPage() {
               {lastUpdate && (
                 <div className="text-xs text-white/30 mt-1 flex items-center gap-2">
                   <span>Last updated: {lastUpdate.toLocaleTimeString()}</span>
-                  <span className="text-[#00FF00]">• Leaderboard updates every 30s</span>
+                  <span className="text-[#00FF00]">• Updates every 15s</span>
+                  <button 
+                    onClick={() => !isUpdating && pollLiveScores()}
+                    disabled={isUpdating}
+                    className="ml-2 px-2 py-0.5 bg-white/10 hover:bg-white/20 rounded text-white/60 hover:text-white transition-colors disabled:opacity-50"
+                  >
+                    {isUpdating ? '⏳' : '🔄'} Refresh
+                  </button>
                 </div>
               )}
             </div>
