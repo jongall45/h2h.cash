@@ -11,18 +11,16 @@ export function UserHeader() {
   const { user, loading, refreshUser } = useAuth()
   const [showDropdown, setShowDropdown] = useState(false)
   const [signingOut, setSigningOut] = useState(false)
-  const [showFallback, setShowFallback] = useState(false)
+  const [loadingTimeout, setLoadingTimeout] = useState(false)
   const router = useRouter()
 
   // After 2 seconds of loading, show sign in button anyway
   useEffect(() => {
-    if (loading) {
-      const timer = setTimeout(() => setShowFallback(true), 2000)
-      return () => clearTimeout(timer)
-    } else {
-      setShowFallback(false)
-    }
-  }, [loading])
+    const timer = setTimeout(() => {
+      setLoadingTimeout(true)
+    }, 2000)
+    return () => clearTimeout(timer)
+  }, [])
 
   const handleSignOut = async () => {
     setSigningOut(true)
@@ -33,11 +31,11 @@ export function UserHeader() {
     router.push('/auth')
   }
 
-  // While loading, show spinner briefly then fallback to sign in
-  if (loading && !showFallback) {
+  // While loading (and before timeout), show a small loading indicator
+  if (loading && !loadingTimeout) {
     return (
-      <div className="px-4 py-2">
-        <Loader2 size={20} className="animate-spin text-white/40" />
+      <div className="w-8 h-8 rounded-full bg-white/5 border border-white/10 flex items-center justify-center">
+        <div className="w-4 h-4 border-2 border-white/20 border-t-[#00FF00] rounded-full animate-spin" />
       </div>
     )
   }
