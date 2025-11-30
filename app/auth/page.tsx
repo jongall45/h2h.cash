@@ -5,11 +5,13 @@ import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { Mail, Phone, ArrowRight, Loader2, Eye, EyeOff, ChevronLeft, Check, X } from "lucide-react"
 import { signUpWithEmail, signInWithEmail, signInWithPhone, verifyPhoneOTP, checkUsernameAvailability } from "../lib/auth"
+import { useAuth } from "../components/AuthProvider"
 
 type AuthMode = 'signin' | 'signup' | 'phone' | 'verify'
 
 export default function AuthPage() {
   const router = useRouter()
+  const { refreshUser } = useAuth()
   const [mode, setMode] = useState<AuthMode>('signin')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -92,16 +94,9 @@ export default function AuthPage() {
         if (error) {
           setError(error)
         } else if (user) {
-          console.log('Signup successful, user:', user)
-          // Store user locally as backup
-          localStorage.setItem('h2h_user', JSON.stringify(user))
-          
-          // Give auth state a moment to propagate before redirecting
-          await new Promise(resolve => setTimeout(resolve, 500))
-          
-          console.log('Redirecting to contests...')
+          await refreshUser()
           router.push('/contests')
-          return // Don't set loading false, we're navigating
+          return
         }
       } else {
         const { user, error } = await signInWithEmail(email, password)
@@ -109,20 +104,14 @@ export default function AuthPage() {
         if (error) {
           setError(error)
         } else if (user) {
-          console.log('Sign in successful, user:', user)
-          localStorage.setItem('h2h_user', JSON.stringify(user))
-          
-          // Give auth state a moment to propagate before redirecting
-          await new Promise(resolve => setTimeout(resolve, 500))
-          
-          console.log('Redirecting to contests...')
+          await refreshUser()
           router.push('/contests')
-          return // Don't set loading false, we're navigating
+          return
         }
       }
     } catch (err) {
       clearTimeout(timeout)
-      console.error('Auth error:', err)
+      console.error('[AuthPage] Auth error:', err)
       setError('An unexpected error occurred. Please try again.')
     }
 
@@ -153,8 +142,9 @@ export default function AuthPage() {
     if (error) {
       setError(error)
     } else if (user) {
-      localStorage.setItem('h2h_user', JSON.stringify(user))
+      await refreshUser()
       router.push('/contests')
+      return
     }
 
     setLoading(false)

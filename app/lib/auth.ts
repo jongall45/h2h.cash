@@ -13,8 +13,6 @@ export interface User {
 // Sign up with email
 export async function signUpWithEmail(email: string, password: string, username: string): Promise<{ user: User | null; error: string | null; needsConfirmation?: boolean }> {
   try {
-    console.log('Starting signup for:', email, 'with username:', username)
-    
     // First create the auth user
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email,
@@ -27,7 +25,6 @@ export async function signUpWithEmail(email: string, password: string, username:
     })
 
     if (authError) {
-      console.error('Signup auth error:', authError)
       return { user: null, error: authError.message }
     }
 
@@ -35,14 +32,11 @@ export async function signUpWithEmail(email: string, password: string, username:
       return { user: null, error: 'Failed to create account' }
     }
 
-    console.log('Auth user created:', authData.user.id)
-    console.log('Session exists:', !!authData.session)
-
-    // Create user profile in our users table
+    // Create user profile in our users table - MUST use the same ID as auth user
     const { data: profile, error: profileError } = await supabase
       .from('users')
       .insert({
-        id: authData.user.id,
+        id: authData.user.id,  // Critical: Must match auth.users ID
         email,
         username,
         balance: 0
@@ -51,27 +45,21 @@ export async function signUpWithEmail(email: string, password: string, username:
       .single()
 
     if (profileError) {
-      console.error('Error creating profile:', profileError)
       // Check if this is a duplicate user error
       if (profileError.code === '23505') {
         return { user: null, error: 'An account with this email already exists. Please sign in instead.' }
       }
-      // For other errors, continue - the auth user was still created
-    } else {
-      console.log('User profile created successfully')
+      // For other errors, continue - profile can be created later
     }
 
-    // Check if email confirmation is required (for when you turn it back on)
+    // Check if email confirmation is required
     if (!authData.session) {
-      console.log('No session - email confirmation required')
       return { 
         user: null, 
         error: 'Please check your email and click the confirmation link to complete your registration.',
         needsConfirmation: true
       }
     }
-
-    console.log('Signup successful with active session')
     
     // Session exists - user is logged in and ready to go
     return {
@@ -85,59 +73,72 @@ export async function signUpWithEmail(email: string, password: string, username:
       error: null
     }
   } catch (err) {
-    console.error('Sign up error:', err)
+    console.error('Signup error:', err)
     return { user: null, error: 'An unexpected error occurred. Please try again.' }
   }
 }
 
-// Sign in with email - direct fetch, no SDK
+// Sign in with email - using proper Supabase SDK
 export async function signInWithEmail(email: string, password: string): Promise<{ user: User | null; error: string | null }> {
   try {
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-    const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-    
-    if (!supabaseUrl || !supabaseKey) {
-      return { user: null, error: 'Auth not configured' }
-    }
-
-    // Direct API call - completely bypasses Supabase SDK
-    const response = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=password`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'apikey': supabaseKey,
-      },
-      body: JSON.stringify({ email, password })
+    // Use Supabase's built-in signInWithPassword - handles all session management
+    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+      email,
+      password
     })
 
-    const data = await response.json()
-
-    if (!response.ok) {
-      return { user: null, error: data.error_description || data.msg || 'Invalid email or password' }
+    if (authError) {
+      return { user: null, error: authError.message }
     }
 
-    if (!data.user || !data.access_token) {
+    if (!authData.user || !authData.session) {
       return { user: null, error: 'Sign in failed' }
     }
 
-    // Store session in localStorage manually (bypass SDK)
-    const session = {
-      access_token: data.access_token,
-      refresh_token: data.refresh_token,
-      expires_at: Math.floor(Date.now() / 1000) + data.expires_in,
-      user: data.user
+    // Fetch the actual user profile from database to get real username and balance
+    let timeoutId: NodeJS.Timeout | null = null
+    const profilePromise = supabase
+      .from('users')
+      .select('*')
+      .eq('id', authData.user.id)
+      .maybeSingle()
+
+    const timeoutPromise = new Promise<{ data: null; error: any }>((resolve) => {
+      timeoutId = setTimeout(() => {
+        resolve({ 
+          data: null, 
+          error: { message: 'Database timeout', code: 'TIMEOUT' } 
+        })
+      }, 3000)
+    })
+
+    const result = await Promise.race([
+      profilePromise.then(res => { if (timeoutId) clearTimeout(timeoutId); return res; }),
+      timeoutPromise
+    ]) as any
+
+    const { data: profile, error: profileError } = result
+
+    if (profileError || !profile) {
+      // Fall back to user metadata from auth
+      const user: User = {
+        id: authData.user.id,
+        email: authData.user.email,
+        username: authData.user.user_metadata?.username || authData.user.email?.split('@')[0] || 'User',
+        balance: 0,
+        createdAt: authData.user.created_at || new Date().toISOString()
+      }
+      return { user, error: null }
     }
     
-    // Store for Supabase SDK to pick up
-    const storageKey = `sb-${new URL(supabaseUrl).hostname.split('.')[0]}-auth-token`
-    localStorage.setItem(storageKey, JSON.stringify(session))
-
     const user: User = {
-      id: data.user.id,
-      email: data.user.email,
-      username: data.user.email?.split('@')[0] || 'User',
-      balance: 0,
-      createdAt: data.user.created_at
+      id: authData.user.id,
+      email: profile.email || authData.user.email,
+      phone: profile.phone,
+      username: profile.username,
+      avatarUrl: profile.avatar_url,
+      balance: profile.balance || 0,
+      createdAt: profile.created_at || authData.user.created_at
     }
 
     return { user, error: null }
@@ -224,84 +225,91 @@ export async function verifyPhoneOTP(phone: string, token: string): Promise<{ us
   }
 }
 
-// Sign out
+// Sign out - using proper Supabase SDK
 export async function signOut(): Promise<void> {
-  // Clear localStorage first
-  if (typeof window !== 'undefined') {
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-    if (supabaseUrl) {
-      const storageKey = `sb-${new URL(supabaseUrl).hostname.split('.')[0]}-auth-token`
-      localStorage.removeItem(storageKey)
-    }
-    localStorage.removeItem('h2h_user')
-  }
-  // Then try SDK signout (don't await in case it hangs)
-  supabase.auth.signOut().catch(() => {})
+  await supabase.auth.signOut()
 }
 
-// Get current session - read from localStorage first to avoid SDK issues
+// Get current user - using proper Supabase SDK with timeout protection
 export async function getCurrentUser(): Promise<{ user: User | null; error: string | null }> {
   try {
-    // First try to read from localStorage directly (our manual session)
-    if (typeof window !== 'undefined') {
-      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-      if (supabaseUrl) {
-        const storageKey = `sb-${new URL(supabaseUrl).hostname.split('.')[0]}-auth-token`
-        const stored = localStorage.getItem(storageKey)
-        
-        if (stored) {
-          try {
-            const session = JSON.parse(stored)
-            if (session?.user && session?.access_token) {
-              // Check if session is expired
-              const now = Math.floor(Date.now() / 1000)
-              if (session.expires_at && session.expires_at > now) {
-                return {
-                  user: {
-                    id: session.user.id,
-                    email: session.user.email,
-                    phone: session.user.phone,
-                    username: session.user.email?.split('@')[0] || 'User',
-                    balance: 0,
-                    createdAt: session.user.created_at
-                  },
-                  error: null
-                }
-              }
-            }
-          } catch (e) {
-            // Invalid JSON, continue to SDK fallback
-          }
-        }
-      }
-    }
-
-    // Fallback to SDK with timeout
-    const timeoutPromise = new Promise<{ user: null; error: null }>((resolve) => {
-      setTimeout(() => resolve({ user: null, error: null }), 3000)
+    // Add timeout wrapper for the entire operation
+    let operationTimeoutId: NodeJS.Timeout | null = null
+    const timeoutPromise = new Promise<{ user: null; error: string }>((resolve) => {
+      operationTimeoutId = setTimeout(() => {
+        resolve({ user: null, error: 'Request timed out' })
+      }, 5000)
     })
-    
-    const sessionPromise = (async () => {
-      const { data: { session } } = await supabase.auth.getSession()
+
+    const getUserPromise = (async () => {
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession()
       
+      if (sessionError) {
+        return { user: null, error: sessionError.message }
+      }
+
       if (!session?.user) {
         return { user: null, error: null }
       }
 
-      return {
-        user: {
-          id: session.user.id,
-          email: session.user.email,
-          phone: session.user.phone,
-          username: session.user.email?.split('@')[0] || 'User',
-          balance: 0,
-          createdAt: session.user.created_at
-        } as User,
-        error: null
+      // Fetch the actual user profile from the database
+      let profileTimeoutId: NodeJS.Timeout | null = null
+      const profilePromise = supabase
+        .from('users')
+        .select('*')
+        .eq('id', session.user.id)
+        .maybeSingle()
+
+      const profileTimeout = new Promise<{ data: null; error: any }>((resolve) => {
+        profileTimeoutId = setTimeout(() => {
+          resolve({ 
+            data: null, 
+            error: { message: 'Database query timed out', code: 'TIMEOUT' } 
+          })
+        }, 3000)
+      })
+
+      const profileResult = await Promise.race([
+        profilePromise.then(res => { if (profileTimeoutId) clearTimeout(profileTimeoutId); return res; }),
+        profileTimeout
+      ]) as any
+
+      const { data: profile, error: profileError } = profileResult
+
+      if (profileError || !profile) {
+        // Return basic user info from session
+        return {
+          user: {
+            id: session.user.id,
+            email: session.user.email,
+            phone: session.user.phone,
+            username: session.user.user_metadata?.username || session.user.email?.split('@')[0] || 'User',
+            balance: 0,
+            createdAt: session.user.created_at || new Date().toISOString()
+          },
+          error: null
+        }
       }
+      
+      const user: User = {
+        id: profile.id,
+        email: profile.email,
+        phone: profile.phone,
+        username: profile.username,
+        avatarUrl: profile.avatar_url,
+        balance: profile.balance || 0,
+        createdAt: profile.created_at
+      }
+
+      return { user, error: null }
     })()
 
-    return await Promise.race([sessionPromise, timeoutPromise])
+    const finalResult = await Promise.race([
+      getUserPromise.then(res => { if (operationTimeoutId) clearTimeout(operationTimeoutId); return res; }),
+      timeoutPromise
+    ]) as { user: User | null; error: string | null }
+    
+    return finalResult
   } catch (err) {
     console.error('Get current user error:', err)
     return { user: null, error: null }
