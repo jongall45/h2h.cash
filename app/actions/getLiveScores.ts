@@ -2,6 +2,13 @@
 
 import { parseBoxScore, parseGame, PlayerStats, LiveGame, getStatValue } from '../lib/liveStats'
 
+// HARDCODED PLAYER TEAMS - for players with duplicate names
+// Props are only for offensive players, so we hardcode the offensive player's team
+const KNOWN_PLAYERS: Record<string, string> = {
+  'josh allen': 'BUF',  // QB Josh Allen, not JAX linebacker Josh Allen
+  // Add more if needed in the future
+}
+
 // Fetch live NFL games from ESPN - no caching
 export async function getLiveGames(): Promise<LiveGame[]> {
   try {
@@ -80,41 +87,24 @@ export async function resolvePicks(picks: {
 
   return picks.map(pick => {
     const pickPlayerName = normalizeName(pick.player)
-    const pickTeam = pick.team?.toUpperCase()
-    const pickStat = pick.stat.toUpperCase()
     
-    // STRICT matching: player must have actual stats for the stat type
-    // This prevents Josh Allen (JAX DEF) matching Josh Allen (BUF QB) PASS props
-    const isValidMatch = (stats: PlayerStats): boolean => {
-      // If we have team data, verify it matches
-      if (pickTeam && stats.teamAbbr && pickTeam !== stats.teamAbbr.toUpperCase()) {
-        return false
-      }
-      
-      // STRICT stat verification - player must have ACTUAL stats
-      if (pickStat === 'PASS') {
-        // QB must have thrown at least one pass (completions > 0)
-        // Defensive players will NEVER have completions
-        return stats.completions > 0
-      }
-      if (pickStat === 'RUSH') {
-        // Runner must have rushing yards (even 0 is fine if they have attempts)
-        // But we need some indication they're a ball carrier
-        return stats.rushingYards > 0 || stats.rushingTouchdowns > 0
-      }
-      if (pickStat === 'REC') {
-        // Receiver must have at least one catch
-        return stats.receptions > 0
-      }
-      return true
+    // Get the required team - from pick data OR hardcoded known players
+    const knownTeam = KNOWN_PLAYERS[pickPlayerName]
+    const requiredTeam = pick.team?.toUpperCase() || knownTeam
+    
+    // Helper to check if team matches (if we have a required team)
+    const teamMatches = (playerTeam: string | undefined): boolean => {
+      if (!requiredTeam) return true // No team requirement
+      if (!playerTeam) return true // No team data on player
+      return playerTeam.toUpperCase() === requiredTeam
     }
     
-    // Search for player with strict matching
+    // Search for player
     let found: { stats: PlayerStats; gameStatus: LiveGame['status'] } | undefined
     
-    // Try exact name match first
+    // Try exact name match
     const exactMatch = allPlayers.get(pickPlayerName)
-    if (exactMatch && isValidMatch(exactMatch.stats)) {
+    if (exactMatch && teamMatches(exactMatch.stats.teamAbbr)) {
       found = exactMatch
     }
     
@@ -126,7 +116,7 @@ export async function resolvePicks(picks: {
                            normalizedName.includes(pickPlayerName) || 
                            pickPlayerName.includes(normalizedName)
         
-        if (nameMatches && isValidMatch(data.stats)) {
+        if (nameMatches && teamMatches(data.stats.teamAbbr)) {
           found = data
           break
         }
@@ -144,7 +134,7 @@ export async function resolvePicks(picks: {
           const lastName = normalizedName.split(' ').pop() || ''
           const firstInitial = normalizedName.charAt(0)
           
-          if (lastName === pickLastName && firstInitial === pickFirstInitial && isValidMatch(data.stats)) {
+          if (lastName === pickLastName && firstInitial === pickFirstInitial && teamMatches(data.stats.teamAbbr)) {
             found = data
             break
           }
@@ -152,7 +142,7 @@ export async function resolvePicks(picks: {
       }
     }
 
-    // NOT FOUND = PENDING (game likely hasn't started or player has no stats yet)
+    // NOT FOUND = PENDING
     if (!found) {
       const allGamesFinished = games.every(g => g.status.type === 'post')
       return {
