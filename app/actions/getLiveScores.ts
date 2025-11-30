@@ -5,7 +5,7 @@ import { parseBoxScore, parseGame, PlayerStats, LiveGame, getStatValue } from '.
 // HARDCODED PLAYER TEAMS - for players with duplicate names
 // Props are only for offensive players, so we hardcode the offensive player's team
 const KNOWN_PLAYERS: Record<string, string> = {
-  'josh allen': 'BUF',  // QB Josh Allen, not JAX linebacker Josh Allen
+  'josh allen': 'BUF',     // QB Josh Allen, not JAX linebacker  'christian kirk': 'HOU', // WR Christian Kirk on Texans
   // Add more if needed in the future
 }
 
