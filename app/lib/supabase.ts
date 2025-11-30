@@ -62,6 +62,7 @@ export interface PayoutTier {
 }
 
 export interface EntryPick {
+  team?: string  // Team abbreviation for accurate player matching
   player: string
   stat: string
   line: number
