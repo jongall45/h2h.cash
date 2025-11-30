@@ -82,6 +82,47 @@ export default function ContestDetailPage() {
     }
   }, [contest, isUpdating])
 
+  // Auto-detect game start and set contest to live
+  const checkAndSetLive = useCallback(async () => {
+    if (!contest || contest.status !== 'open') return
+    
+    try {
+      const status = await getContestLiveStatus()
+      
+      if (status.hasGamesStarted) {
+        console.log('[Auto-Live] Games have started! Setting contest to LIVE...')
+        
+        // Update contest status to 'live' in database
+        const response = await fetch(`/api/admin/set-live?contestId=${contest.id}`)
+        const result = await response.json()
+        
+        if (result.success) {
+          console.log('[Auto-Live] Contest is now LIVE!')
+          // Refetch contest to get updated status
+          const updatedContest = await getContest(contest.id)
+          if (updatedContest) {
+            setContest(updatedContest)
+          }
+        }
+      }
+    } catch (error) {
+      console.error('[Auto-Live] Error checking game status:', error)
+    }
+  }, [contest])
+
+  // Check for game start every 30 seconds when contest is open
+  useEffect(() => {
+    if (!contest || contest.status !== 'open') return
+    
+    // Check immediately
+    checkAndSetLive()
+    
+    // Then check every 30 seconds
+    const interval = setInterval(checkAndSetLive, 30000)
+    
+    return () => clearInterval(interval)
+  }, [contest?.id, contest?.status, checkAndSetLive])
+
   // Set up polling interval when contest is live
   useEffect(() => {
     if (!contest || contest.status !== 'live') return
