@@ -207,11 +207,44 @@ export async function getGameProps(gameId: string) {
     }
   });
 
-  // Limit to 10 unique player/stat combos
-  const limitedProps = propsWithLines.slice(0, 10);
+  // Group props by stat type to ensure balanced coverage
+  const propsByStatType: Record<string, any[]> = {
+    'player_pass_yds': [],
+    'player_rush_yds': [],
+    'player_reception_yds': []
+  };
+  
+  propsWithLines.forEach(prop => {
+    const baseType = prop.type.replace('_alternate', '');
+    if (propsByStatType[baseType]) {
+      propsByStatType[baseType].push(prop);
+    }
+  });
+  
+  // Log what we found for debugging
+  console.log('[Odds API] Props by type:', {
+    passing: propsByStatType['player_pass_yds'].length,
+    rushing: propsByStatType['player_rush_yds'].length,
+    receiving: propsByStatType['player_reception_yds'].length
+  });
+  
+  // Take balanced props from each category (ensure rushing is included!)
+  // Priority: 4 passing, 3 rushing, 3 receiving = 10 total
+  const balancedProps = [
+    ...propsByStatType['player_pass_yds'].slice(0, 4),
+    ...propsByStatType['player_rush_yds'].slice(0, 3),
+    ...propsByStatType['player_reception_yds'].slice(0, 3)
+  ];
+  
+  // If we don't have enough of one type, fill with others
+  const limitedProps = balancedProps.length >= 10 
+    ? balancedProps 
+    : [...balancedProps, ...propsWithLines.filter(p => !balancedProps.includes(p))].slice(0, 10);
 
   // ENRICH WITH TEAM DATA FROM ESPN
   const enrichedProps = await enrichPropsWithTeams(limitedProps);
+  
+  console.log('[Odds API] Final props:', enrichedProps.map(p => `${p.player} - ${p.stat}`));
   
   return enrichedProps;
 }
