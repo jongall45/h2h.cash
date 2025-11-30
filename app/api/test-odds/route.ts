@@ -24,7 +24,43 @@ export async function GET() {
     
     const games = await marketsRes.json()
     
-    // Test 2: Get rushing props specifically
+    // Test 2: Get ALL player props to see what's available
+    const propsRes = await fetch(
+      `https://api.the-odds-api.com/v4/sports/americanfootball_nfl/odds?apiKey=${API_KEY}&regions=us&markets=player_pass_yds,player_rush_yds,player_reception_yds,player_pass_yds_alternate,player_rush_yds_alternate,player_reception_yds_alternate&oddsFormat=american`,
+      { cache: 'no-store' }
+    )
+    
+    const propsData = await propsRes.json()
+    
+    // Count props by type across all games
+    const propCounts: Record<string, number> = {}
+    const propsByType: Record<string, any[]> = {}
+    
+    for (const game of propsData) {
+      for (const bookie of game.bookmakers || []) {
+        for (const market of bookie.markets || []) {
+          const marketKey = market.key
+          if (!propCounts[marketKey]) {
+            propCounts[marketKey] = 0
+            propsByType[marketKey] = []
+          }
+          
+          const players = market.outcomes
+            .filter((o: any) => o.name === 'Over')
+            .map((o: any) => ({
+              player: o.description,
+              line: o.point,
+              odds: o.price,
+              game: `${game.away_team} @ ${game.home_team}`
+            }))
+          
+          propCounts[marketKey] += players.length
+          propsByType[marketKey].push(...players)
+        }
+      }
+    }
+    
+    // Test 3: Get rushing props specifically
     const rushRes = await fetch(
       `https://api.the-odds-api.com/v4/sports/americanfootball_nfl/odds?apiKey=${API_KEY}&regions=us&markets=player_rush_yds,player_rush_yds_alternate&oddsFormat=american`,
       { cache: 'no-store' }
@@ -100,6 +136,15 @@ export async function GET() {
       },
       totalGames: games.length,
       availableMarkets: Array.from(availableMarkets).sort(),
+      propCountsByType: propCounts,
+      samplePropsByType: {
+        passing: propsByType['player_pass_yds']?.slice(0, 5) || [],
+        passingAlt: propsByType['player_pass_yds_alternate']?.slice(0, 5) || [],
+        rushing: propsByType['player_rush_yds']?.slice(0, 10) || [],
+        rushingAlt: propsByType['player_rush_yds_alternate']?.slice(0, 10) || [],
+        receiving: propsByType['player_reception_yds']?.slice(0, 5) || [],
+        receivingAlt: propsByType['player_reception_yds_alternate']?.slice(0, 5) || []
+      },
       rushingPropsAnalysis: {
         gamesWithRushingProps: rushingProps.length,
         details: rushingProps

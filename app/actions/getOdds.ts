@@ -132,8 +132,14 @@ export async function getGameProps(gameId: string) {
   // Group all lines by player and stat type
   const playerLines: Record<string, any[]> = {};
   
+  // Log what markets are available for debugging
+  console.log('[Odds API] Bookmakers:', data.bookmakers?.map((b: any) => b.key))
+  console.log('[Odds API] Markets:', data.bookmakers?.flatMap((b: any) => b.markets?.map((m: any) => m.key)))
+  
   data.bookmakers.forEach((bookie: any) => {
-    if (!['draftkings', 'fanduel', 'betmgm'].includes(bookie.key)) return;
+    // Accept more bookmakers to get better prop coverage
+    const acceptedBooks = ['draftkings', 'fanduel', 'betmgm', 'pointsbetus', 'bovada', 'betonlineag', 'mybookieag', 'williamhill_us', 'caesars']
+    if (!acceptedBooks.includes(bookie.key)) return;
 
     bookie.markets.forEach((market: any) => {
       const statType = market.key.replace('_alternate', '');
