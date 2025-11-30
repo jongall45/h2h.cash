@@ -169,7 +169,7 @@ export async function resolvePicks(picks: {
         }
       }
     }
-    
+
     // If still not found, try matching by last name AND first initial
     // This prevents matching "James Cook" to "Bryan Cook"
     if (!found && pickLastName.length > 2) {

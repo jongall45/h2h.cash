@@ -323,29 +323,29 @@ export default function ContestDetailPage() {
 
             {/* Progress & Action - Only show when contest is open */}
             {contest.status === 'open' ? (
-              <div className="flex flex-col md:flex-row items-center gap-6">
-                <div className="w-full md:flex-1">
-                  <div className="flex justify-between text-xs mb-2">
-                    <span className="text-white/40">{contest.maxEntries - contest.currentEntries} spots left</span>
-                    <span className="text-[#00FF00]">{Math.round((contest.currentEntries / contest.maxEntries) * 100)}%</span>
-                  </div>
-                  <div className="h-2 bg-white/10 rounded-full overflow-hidden">
-                    <div 
-                      className="h-full bg-[#00FF00] shadow-[0_0_10px_#00FF00]"
-                      style={{ width: `${Math.max((contest.currentEntries / contest.maxEntries) * 100, 2)}%` }}
-                    />
-                  </div>
+            <div className="flex flex-col md:flex-row items-center gap-6">
+              <div className="w-full md:flex-1">
+                <div className="flex justify-between text-xs mb-2">
+                  <span className="text-white/40">{contest.maxEntries - contest.currentEntries} spots left</span>
+                  <span className="text-[#00FF00]">{Math.round((contest.currentEntries / contest.maxEntries) * 100)}%</span>
                 </div>
-                
-                {contest.currentEntries < contest.maxEntries && (
-                  <button
-                    onClick={handleEnterContest}
-                    className="w-full md:w-auto px-8 py-3 bg-[#00FF00] hover:bg-[#00DD00] text-black font-bold rounded-xl transition-all hover:scale-105 active:scale-95 shadow-[0_0_20px_rgba(0,255,0,0.3)]"
-                  >
-                    Enter Contest
-                  </button>
-                )}
+                <div className="h-2 bg-white/10 rounded-full overflow-hidden">
+                  <div 
+                    className="h-full bg-[#00FF00] shadow-[0_0_10px_#00FF00]"
+                    style={{ width: `${Math.max((contest.currentEntries / contest.maxEntries) * 100, 2)}%` }}
+                  />
+                </div>
               </div>
+              
+                {contest.currentEntries < contest.maxEntries && (
+                <button
+                  onClick={handleEnterContest}
+                  className="w-full md:w-auto px-8 py-3 bg-[#00FF00] hover:bg-[#00DD00] text-black font-bold rounded-xl transition-all hover:scale-105 active:scale-95 shadow-[0_0_20px_rgba(0,255,0,0.3)]"
+                >
+                  Enter Contest
+                </button>
+              )}
+            </div>
             ) : (
               <div className="flex items-center justify-center gap-2 py-2 px-4 bg-red-500/10 rounded-xl border border-red-500/20">
                 <span className="text-red-400 font-bold text-sm">🔒 ENTRIES CLOSED</span>
@@ -492,7 +492,7 @@ export default function ContestDetailPage() {
                     const displayHits = entry.displayHits
                     
                     // Calculate pending picks
-                    const entryResults = livePickResults.get(entry.id)
+                      const entryResults = livePickResults.get(entry.id)
                     const pending = entryResults 
                       ? entryResults.filter(r => r.hit === null).length 
                       : (canRevealAllData ? 0 : 5)
