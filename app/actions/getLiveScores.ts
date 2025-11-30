@@ -100,47 +100,67 @@ export async function resolvePicks(picks: {
   return picks.map(pick => {
     const pickPlayerName = normalizeName(pick.player)
     const pickLastName = pickPlayerName.split(' ').pop() || ''
-    const pickTeam = pick.team?.toUpperCase() // Team from pick data
+    const pickTeam = pick.team?.toUpperCase()
+    const pickStat = pick.stat.toUpperCase()
     
-    // Helper to verify team matches (returns true if teams match or no team data)
+    // Helper to verify team matches
     const teamMatches = (playerTeam: string | undefined) => {
-      if (!pickTeam) return true // No team in pick, allow match
-      if (!playerTeam) return true // No team in data, allow match
+      if (!pickTeam) return true
+      if (!playerTeam) return true
       return pickTeam === playerTeam.toUpperCase()
+    }
+    
+    // Helper to verify player has the stat type we're looking for
+    // This prevents matching Josh Allen (JAX DEF) when looking for PASS stats
+    const hasRelevantStats = (stats: PlayerStats) => {
+      if (pickStat === 'PASS') {
+        // For passing, player must have passing attempts or yards
+        return (stats.passYds !== undefined && stats.passYds > 0) || 
+               (stats.passAtt !== undefined && stats.passAtt > 0)
+      }
+      if (pickStat === 'RUSH') {
+        // For rushing, player must have rush attempts or yards
+        return (stats.rushYds !== undefined) || (stats.rushAtt !== undefined && stats.rushAtt > 0)
+      }
+      if (pickStat === 'REC') {
+        // For receiving, player must have receptions or targets
+        return (stats.recYds !== undefined) || (stats.receptions !== undefined)
+      }
+      return true // Unknown stat type, allow match
     }
     
     let found = allPlayers.get(pickPlayerName)
     
-    // Verify team for exact match - critical for names like "Josh Allen"
-    if (found && !teamMatches(found.stats.teamAbbr)) {
-      console.log('[Team Mismatch] ' + pick.player + ' found but wrong team: ' + found.stats.teamAbbr + ' vs ' + pickTeam)
-      found = undefined // Wrong team, keep looking
+    // Verify team AND stat type for exact match
+    if (found && (!teamMatches(found.stats.teamAbbr) || !hasRelevantStats(found.stats))) {
+      console.log('[Match Rejected] ' + pick.player + ': team=' + found.stats.teamAbbr + ', hasStats=' + hasRelevantStats(found.stats))
+      found = undefined
     }
     
-    // Try normalized match with team verification
+    // Try normalized match with team + stat verification
     if (!found) {
       for (const [name, data] of allPlayers.entries()) {
         const normalizedBoxName = normalizeName(name)
-        if (normalizedBoxName === pickPlayerName && teamMatches(data.stats.teamAbbr)) {
+        if (normalizedBoxName === pickPlayerName && teamMatches(data.stats.teamAbbr) && hasRelevantStats(data.stats)) {
           found = data
           break
         }
       }
     }
     
-    // Try partial match with team verification
+    // Try partial match with team + stat verification
     if (!found) {
       for (const [name, data] of allPlayers.entries()) {
         const normalizedBoxName = normalizeName(name)
         if ((normalizedBoxName.includes(pickPlayerName) || pickPlayerName.includes(normalizedBoxName)) 
-            && teamMatches(data.stats.teamAbbr)) {
+            && teamMatches(data.stats.teamAbbr) && hasRelevantStats(data.stats)) {
           found = data
           break
         }
       }
     }
 
-    // Last resort: last name + first initial with team verification
+    // Last resort: last name + first initial with team + stat verification
     if (!found && pickLastName.length > 2) {
       const pickFirstInitial = pickPlayerName.charAt(0)
       
@@ -149,14 +169,15 @@ export async function resolvePicks(picks: {
         const boxLastName = normalizedBoxName.split(' ').pop() || ''
         const boxFirstInitial = normalizedBoxName.charAt(0)
         
-        if (boxLastName === pickLastName && boxFirstInitial === pickFirstInitial && teamMatches(data.stats.teamAbbr)) {
+        if (boxLastName === pickLastName && boxFirstInitial === pickFirstInitial 
+            && teamMatches(data.stats.teamAbbr) && hasRelevantStats(data.stats)) {
           found = data
           break
         }
       }
     }
 
-    // Player not found - show as PENDING (game likely hasn't started)
+    // Player not found - show as PENDING
     if (!found) {
       const allGamesFinished = games.every(g => g.status.type === 'post')
       
