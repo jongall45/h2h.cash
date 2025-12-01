@@ -233,7 +233,7 @@ export default function ContestsPage() {
                     <div className="text-[10px] text-[#555] uppercase tracking-wider">Entries</div>
                   </div>
                   <div className="bg-[#0a0a0a] rounded-xl p-3 text-center">
-                    <div className="text-xl font-bold">Top {Math.round((contest.payoutSpots / contest.maxEntries) * 100)}%</div>
+                    <div className="text-xl font-bold">Top {Math.round((contest.payoutStructure.length / contest.maxEntries) * 100)}%</div>
                     <div className="text-[10px] text-[#555] uppercase tracking-wider">Paid</div>
                   </div>
                 </div>
