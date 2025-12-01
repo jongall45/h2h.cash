@@ -46,6 +46,7 @@ export interface PickResolutionResult {
   currentValue: number
   hit: boolean | null
   gameStatus: 'pre' | 'in' | 'post'
+  playerId?: string
   gameClock?: string
 }
 
@@ -173,6 +174,7 @@ export async function resolvePicks(picks: {
       currentValue,
       hit,
       gameStatus: gameStatus.type,
+      playerId: found.stats.playerId,
       gameClock
     }
   })

@@ -1026,6 +1026,12 @@ function PickCard({
                         progressPercent >= 80 ? '#00C853' :
                         progressPercent >= 50 ? '#FFB300' : '#555'
   
+  // Get player headshot URL
+  const playerId = liveResult?.playerId
+  const headshotUrl = playerId 
+    ? `https://a.espncdn.com/i/headshots/nfl/players/full/${playerId}.png`
+    : null
+  
   return (
     <div 
       className="p-4 rounded-xl border transition-all"
@@ -1035,16 +1041,32 @@ function PickCard({
       }}
     >
       <div className="flex items-center gap-3 mb-2">
-        {/* Pick number */}
+        {/* Player avatar/headshot */}
         <div 
-          className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold shrink-0"
+          className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 overflow-hidden"
           style={{ 
             backgroundColor: '#252525',
-            color: config.color,
-            border: '1px solid #333'
+            border: `2px solid ${config.borderColor}`
           }}
         >
-          {index}
+          {headshotUrl ? (
+            <img 
+              src={headshotUrl}
+              alt={pick.player}
+              className="w-full h-full object-cover"
+              onError={(e) => {
+                // Fallback to number if image fails
+                e.currentTarget.style.display = 'none'
+                e.currentTarget.nextElementSibling?.classList.remove('hidden')
+              }}
+            />
+          ) : null}
+          <span 
+            className={`text-sm font-semibold ${headshotUrl ? 'hidden' : ''}`}
+            style={{ color: config.color }}
+          >
+            {index}
+          </span>
         </div>
 
         {/* Player info */}
