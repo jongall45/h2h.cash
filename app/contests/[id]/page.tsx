@@ -831,7 +831,7 @@ export default function ContestDetailPage() {
                     </div>
                     
                     <div className="mt-3 text-xs text-[#555] text-center">
-                      Click to view full lineup →
+                      Click to view full lineup
                     </div>
                   </div>
                   )
