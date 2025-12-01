@@ -952,6 +952,7 @@ export default function ContestDetailPage() {
 }
 
 // Individual pick card for the modal with live data support and progress bar
+// Individual pick card for the modal with live data support and progress bar
 function PickCard({ 
   pick, 
   index, 
@@ -976,59 +977,71 @@ function PickCard({
     gameClock = liveResult.gameClock || ''
     progressPercent = Math.min((currentValue / pick.line) * 100, 100)
     
-    // Determine status based on live data
-    // IMPORTANT: Only show MISS if game is FINAL (post) and didn't hit
     if (liveResult.hit === true) {
       status = 'hit'
     } else if (liveResult.gameStatus === 'pre') {
-      // Game hasn't started - always PENDING
       status = 'pending'
     } else if (liveResult.gameStatus === 'in') {
-      // Game in progress - LIVE (still has chance to hit)
       status = 'live'
     } else if (liveResult.hit === false && liveResult.gameStatus === 'post') {
-      // Game is FINAL and didn't hit - MISS
       status = 'miss'
     }
-    // Otherwise stays as 'pending' (default)
   } else if (contestCompleted) {
     status = pick.hit === true ? 'hit' : pick.hit === false ? 'miss' : 'pending'
     if (status === 'hit') progressPercent = 100
   }
   
+  // Professional color scheme
   const statusConfig = {
-    pending: { color: '#888888', icon: '⏳', text: 'Pending', bgColor: 'rgba(255, 255, 255, 0.03)' },
-    live: { color: '#FFD700', icon: '🔴', text: gameClock || 'LIVE', bgColor: 'rgba(255, 215, 0, 0.08)' },
-    hit: { color: '#00FF00', icon: '✅', text: 'HIT', bgColor: 'rgba(0, 255, 0, 0.08)' },
-    miss: { color: '#ef4444', icon: '❌', text: 'MISS', bgColor: 'rgba(239, 68, 68, 0.08)' }
+    pending: { 
+      color: '#888888', 
+      text: 'Pending', 
+      bgColor: '#1A1A1A',
+      borderColor: '#2A2A2A'
+    },
+    live: { 
+      color: '#FFB300', 
+      text: gameClock || 'LIVE', 
+      bgColor: 'rgba(255, 179, 0, 0.06)',
+      borderColor: 'rgba(255, 179, 0, 0.25)'
+    },
+    hit: { 
+      color: '#00C853', 
+      text: 'HIT', 
+      bgColor: 'rgba(0, 200, 83, 0.06)',
+      borderColor: 'rgba(0, 200, 83, 0.25)'
+    },
+    miss: { 
+      color: '#FF5252', 
+      text: 'MISS', 
+      bgColor: 'rgba(255, 82, 82, 0.06)',
+      borderColor: 'rgba(255, 82, 82, 0.25)'
+    }
   }
   
   const config = statusConfig[status]
   
-  // Determine progress bar color based on status
-  const progressColor = status === 'hit' ? '#00FF00' : 
-                        status === 'miss' ? '#ef4444' : 
-                        progressPercent >= 80 ? '#00FF00' :
-                        progressPercent >= 50 ? '#FFD700' : '#888'
+  const progressColor = status === 'hit' ? '#00C853' : 
+                        status === 'miss' ? '#FF5252' : 
+                        progressPercent >= 80 ? '#00C853' :
+                        progressPercent >= 50 ? '#FFB300' : '#555'
   
   return (
     <div 
       className="p-4 rounded-xl border transition-all"
       style={{
         backgroundColor: config.bgColor,
-        borderColor: status === 'hit' ? 'rgba(0, 255, 0, 0.3)' : 
-                     status === 'miss' ? 'rgba(239, 68, 68, 0.3)' : 
-                     status === 'live' ? 'rgba(255, 215, 0, 0.3)' :
-                     'rgba(255, 255, 255, 0.1)'
+        borderColor: config.borderColor
       }}
     >
       <div className="flex items-center gap-3 mb-2">
         {/* Pick number */}
         <div 
-          className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
+          className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold shrink-0"
           style={{ 
-            backgroundColor: `${config.color}20`,
-            color: config.color
+            backgroundColor: '#252525',
+            color: config.color,
+            border: '1px solid #333'
           }}
         >
           {index}
@@ -1037,31 +1050,33 @@ function PickCard({
         {/* Player info */}
         <div className="flex-1 min-w-0">
           <div className="font-semibold text-white truncate">{pick.player}</div>
-          <div className="text-xs text-[#888888] uppercase tracking-wide">
-            {pick.line}+ {pick.stat.replace(' Yards', '').replace('Passing', 'Pass').replace('Rushing', 'Rush').replace('Receiving', 'Rec')}
+          <div className="text-xs text-[#666] uppercase tracking-wide">
+            {pick.line}+ {pick.stat.replace(' Yards', '').replace('Passing', 'PASS').replace('Rushing', 'RUSH').replace('Receiving', 'REC')}
           </div>
         </div>
 
         {/* Status & Points */}
         <div className="text-right flex-shrink-0">
           <div 
-            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium mb-1 ${
+            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold mb-1 ${
               status === 'live' ? 'animate-pulse' : ''
             }`}
             style={{ 
-              backgroundColor: `${config.color}20`,
-              color: config.color
+              backgroundColor: status === 'pending' ? '#252525' : `${config.color}15`,
+              color: config.color,
+              border: `1px solid ${config.borderColor}`
             }}
           >
-            <span>{config.icon}</span>
+            {status === 'live' && <span className="w-1.5 h-1.5 bg-[#FF5252] rounded-full"></span>}
+            {status === 'hit' && <span>✓</span>}
+            {status === 'miss' && <span>✕</span>}
+            {status === 'pending' && <span>⏳</span>}
             <span>{config.text}</span>
           </div>
           <div 
             className="text-sm font-bold"
             style={{ 
-              color: status === 'hit' ? '#00FF00' : 
-                     status === 'miss' ? '#ef4444' : 
-                     status === 'live' ? '#FFD700' : '#888',
+              color: config.color,
               fontVariantNumeric: 'tabular-nums'
             }}
           >
@@ -1075,22 +1090,21 @@ function PickCard({
 
       {/* Progress bar - only show during live games */}
       {(status === 'live' || status === 'hit' || status === 'miss') && (
-        <div className="mt-2">
-          <div className="flex justify-between text-[10px] mb-1">
+        <div className="mt-3">
+          <div className="flex justify-between text-[11px] mb-1.5">
             <span style={{ color: progressColor }} className="font-medium">
               {currentValue} yds
             </span>
-            <span className="text-[#888888]">
+            <span className="text-[#666]">
               / {pick.line} needed
             </span>
           </div>
-          <div className="h-1.5 bg-[#252525] rounded-full overflow-hidden">
+          <div className="h-1 bg-[#252525] rounded-full overflow-hidden">
             <div 
               className="h-full rounded-full transition-all duration-500"
               style={{ 
                 width: `${progressPercent}%`,
-                backgroundColor: progressColor,
-                boxShadow: status === 'hit' ? '0 0 8px #00FF00' : 'none'
+                backgroundColor: progressColor
               }}
             />
           </div>
