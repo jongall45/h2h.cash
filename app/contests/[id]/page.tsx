@@ -836,6 +836,8 @@ export default function ContestDetailPage() {
                   </div>
                   )
                 })}
+              </div>
+            )
           })()}
         </div>
       </main>
