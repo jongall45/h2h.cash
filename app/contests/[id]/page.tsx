@@ -694,151 +694,72 @@ export default function ContestDetailPage() {
             </div>
           )}
 
-          {activeTab === 'entries' && (() => {
-            // Find user's entries in this contest
-            const myEntries = contest.entries.filter(e => currentUserId && e.oduserId === currentUserId)
-            
-            if (myEntries.length === 0) {
-              return (
-                <div className="bg-[#1A1A1A] border border-[#2A2A2A] rounded-2xl p-8 text-center backdrop-blur-sm">
-                  <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-[#1A1A1A] flex items-center justify-center">
-                    <Users size={40} className="text-white/20" />
-                  </div>
-                  <h3 className="text-xl font-bold mb-2">Your Entries</h3>
-                  <p className="text-[#888888] mb-8 max-w-xs mx-auto">You haven't entered this contest yet. Draft your team to compete for cash prizes.</p>
-                  {contest.status === 'open' && (
-                    <button
-                      onClick={handleEnterContest}
-                      className="px-8 py-3 bg-[#00C853] text-black font-bold rounded-xl hover:bg-[#00DD00] transition-all hover:scale-105 shadow-md"
-                    >
-                      Draft Lineup
-                    </button>
-                  )}
-                </div>
-              )
-            }
-            
-            return (
-              <div className="space-y-4">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                    <Check size={20} className="text-[#00C853]" />
-                    Your Entries ({myEntries.length})
-                  </h3>
-                </div>
-                
-                {myEntries.map((entry, idx) => {
-                  // Get live data for this entry
-                  const liveScore = liveScores.get(entry.id)
-                  const entryResults = livePickResults.get(entry.id)
-                  const hitsCount = entryResults ? entryResults.filter(r => r.hit === true).length : 0
-                  const missCount = entryResults ? entryResults.filter(r => r.hit === false).length : 0
-                  const pendingCount = entryResults ? entryResults.filter(r => r.hit === null).length : entry.picks.length
-                  const actualPoints = liveScore?.totalPoints ?? 0
-                  const multiplier = liveScore?.multiplier ?? 0
-                  
-                  // Find rank in leaderboard
-                  const sortedEntries = [...(contest.entries || [])].sort((a, b) => {
-                    const aScore = liveScores.get(a.id)?.totalPoints ?? 0
-                    const bScore = liveScores.get(b.id)?.totalPoints ?? 0
-                    return bScore - aScore
-                  })
-                  const rank = sortedEntries.findIndex(e => e.id === entry.id) + 1
-                  const prizeAmount = rank > 0 && rank <= payouts.length ? payouts[rank - 1]?.amount : 0
-                  
-                  const isLive = canRevealAllData && pendingCount < entry.picks.length
-                  const isComplete = isCompleted || pendingCount === 0
-                  
-                  return (
-                  <div 
-                    key={entry.id}
-                    onClick={() => setSelectedEntry(entry)}
-                    className="bg-[#1A1A1A] border border-[#2A2A2A] rounded-xl p-4 cursor-pointer hover:bg-[#222] transition-all"
-                  >
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-[#252525] border border-[#333] flex items-center justify-center text-sm font-bold text-[#888]">
-                          {entry.username.charAt(0)}
-                        </div>
-                        <div>
-                          <div className="font-semibold text-white flex items-center gap-2">
-                            Entry #{idx + 1}
-                            {isLive && !isComplete && (
-                              <span className="text-[9px] bg-[#FFB300]/20 text-[#FFB300] px-1.5 py-0.5 rounded flex items-center gap-1">
-                                <span className="w-1.5 h-1.5 bg-[#FF5252] rounded-full animate-pulse"></span>
-                                LIVE
-                              </span>
-                            )}
-                            {isComplete && (
-                              <span className="text-[9px] bg-[#888]/20 text-[#888] px-1.5 py-0.5 rounded">FINAL</span>
-                            )}
-                            {!isLive && !isComplete && (
-                              <span className="text-[9px] bg-[#00C853]/20 text-[#00C853] px-1.5 py-0.5 rounded">SUBMITTED</span>
-                            )}
-                          </div>
-                          <div className="text-xs text-[#666] flex items-center gap-2">
-                            <span>{hitsCount}/{entry.picks.length} Hits</span>
-                            {multiplier > 0 && <span className="text-[#FFB300]">({multiplier}x)</span>}
-                            {prizeAmount > 0 && <span className="text-[#00C853] font-semibold">• #{rank} • Won ${prizeAmount}</span>}
-                          </div>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        {isLive || isComplete ? (
-                          <>
-                            <div className="text-xl font-bold text-white" style={{ fontVariantNumeric: 'tabular-nums' }}>
-                              {actualPoints.toFixed(2)}
-                            </div>
-                            <div className="text-[10px] text-[#666]">
-                              / {entry.totalPoints.toFixed(2)} pot.
-                            </div>
-                          </>
-                        ) : (
-                          <>
-                            <div className="text-xl font-bold text-[#00C853]" style={{ fontVariantNumeric: 'tabular-nums' }}>
-                              {entry.totalPoints.toFixed(2)}
-                            </div>
-                            <div className="text-[10px] text-[#666]">potential pts</div>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                    
-                    {/* Mini pick preview with hit status */}
-                    <div className="flex flex-wrap gap-1.5">
-                      {entry.picks.slice(0, 5).map((pick, i) => {
-                        const pickResult = entryResults?.[i]
-                        const isHit = pickResult?.hit === true
-                        const isMiss = pickResult?.hit === false
-                        const isPending = !pickResult || pickResult.hit === null
-                        
-                        return (
-                          <div 
-                            key={i}
-                            className="text-[10px] rounded px-2 py-1 font-medium"
-                            style={{
-                              backgroundColor: isHit ? 'rgba(0, 200, 83, 0.15)' : 
-                                             isMiss ? 'rgba(255, 82, 82, 0.15)' : 
-                                             '#252525',
-                              color: isHit ? '#00C853' : isMiss ? '#FF5252' : '#888',
-                              border: `1px solid ${isHit ? 'rgba(0, 200, 83, 0.3)' : isMiss ? 'rgba(255, 82, 82, 0.3)' : '#333'}`
-                            }}
-                          >
-                            {isHit && '✓ '}{isMiss && '✕ '}{pick.player.split(' ').pop()} {pick.line}+
-                          </div>
-                        )
-                      })}
-                    </div>
-                    
-                    <div className="mt-3 text-xs text-[#555] text-center">
-                      Click to view full lineup
-                    </div>
-                  </div>
-                  )
-                })}
+
+          {activeTab === 'entries' && contest.entries.filter(e => currentUserId && e.oduserId === currentUserId).length === 0 && (
+            <div className="bg-[#1A1A1A] border border-[#2A2A2A] rounded-2xl p-8 text-center">
+              <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-[#1A1A1A] flex items-center justify-center">
+                <Users size={40} className="text-white/20" />
               </div>
-            )
-          })()}
+              <h3 className="text-xl font-bold mb-2">Your Entries</h3>
+              <p className="text-[#888888] mb-8 max-w-xs mx-auto">You have not entered this contest yet.</p>
+              {contest.status === 'open' && (
+                <button
+                  onClick={handleEnterContest}
+                  className="px-8 py-3 bg-[#00C853] text-black font-bold rounded-xl"
+                >
+                  Draft Lineup
+                </button>
+              )}
+            </div>
+          )}
+
+          {activeTab === 'entries' && contest.entries.filter(e => currentUserId && e.oduserId === currentUserId).length > 0 && (
+            <div className="space-y-4">
+              <h3 className="text-lg font-bold text-white flex items-center gap-2 mb-4">
+                <Check size={20} className="text-[#00C853]" />
+                Your Entries
+              </h3>
+              
+              {contest.entries.filter(e => currentUserId && e.oduserId === currentUserId).map((entry, idx) => (
+                <div 
+                  key={entry.id}
+                  onClick={() => setSelectedEntry(entry)}
+                  className="bg-[#1A1A1A] border border-[#2A2A2A] rounded-xl p-4 cursor-pointer hover:bg-[#222]"
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-[#252525] flex items-center justify-center text-sm font-bold text-[#888]">
+                        {entry.username.charAt(0)}
+                      </div>
+                      <div>
+                        <div className="font-semibold text-white">Entry #{idx + 1}</div>
+                        <div className="text-xs text-[#666]">{entry.picks.length} picks</div>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-xl font-bold text-[#00C853]">{entry.totalPoints.toFixed(2)}</div>
+                      <div className="text-[10px] text-[#666]">potential pts</div>
+                    </div>
+                  </div>
+                  
+                  <div className="flex flex-wrap gap-1.5">
+                    {entry.picks.slice(0, 5).map((pick, i) => (
+                      <div 
+                        key={i}
+                        className="text-[10px] rounded px-2 py-1 font-medium bg-[#252525] text-[#888]"
+                      >
+                        {pick.player.split(' ').pop()} {pick.line}+
+                      </div>
+                    ))}
+                  </div>
+                  
+                  <div className="mt-3 text-xs text-[#555] text-center">
+                    Click to view lineup
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </main>
 
