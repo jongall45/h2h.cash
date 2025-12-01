@@ -388,3 +388,54 @@ export function calculateTotalPoints(picks: EntryPick[]): { total: number; hits:
   
   return { total, hits, isPerfect, multiplier }
 }
+
+// Get all contests including completed (for history/browse)
+export async function getAllContests(): Promise<Contest[]> {
+  const { data: contests, error } = await supabase
+    .from('contests')
+    .select('*')
+    .eq('type', 'public')
+    .order('created_at', { ascending: false })
+
+  if (error) {
+    console.error('Error fetching all contests:', error)
+    return []
+  }
+
+  return (contests || []).map(c => transformContest(c as DbContest))
+}
+
+// Get completed contests with winners
+export async function getCompletedContests(): Promise<Contest[]> {
+  const { data: contests, error } = await supabase
+    .from('contests')
+    .select('*')
+    .eq('type', 'public')
+    .eq('status', 'completed')
+    .order('finalized_at', { ascending: false })
+
+  if (error) {
+    console.error('Error fetching completed contests:', error)
+    return []
+  }
+
+  return (contests || []).map(c => transformContest(c as DbContest))
+}
+
+// Get contest winners (top 3)
+export async function getContestWinners(contestId: string): Promise<any[]> {
+  const { data, error } = await supabase
+    .from('entries')
+    .select('*, users(username)')
+    .eq('contest_id', contestId)
+    .not('rank', 'is', null)
+    .order('rank', { ascending: true })
+    .limit(10)
+
+  if (error) {
+    console.error('Error fetching winners:', error)
+    return []
+  }
+
+  return data || []
+}
