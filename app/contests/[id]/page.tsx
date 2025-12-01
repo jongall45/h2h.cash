@@ -694,72 +694,88 @@ export default function ContestDetailPage() {
             </div>
           )}
 
-
-          {activeTab === 'entries' && contest.entries.filter(e => currentUserId && e.oduserId === currentUserId).length === 0 && (
-            <div className="bg-[#1A1A1A] border border-[#2A2A2A] rounded-2xl p-8 text-center">
-              <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-[#1A1A1A] flex items-center justify-center">
-                <Users size={40} className="text-white/20" />
-              </div>
-              <h3 className="text-xl font-bold mb-2">Your Entries</h3>
-              <p className="text-[#888888] mb-8 max-w-xs mx-auto">You have not entered this contest yet.</p>
-              {contest.status === 'open' && (
-                <button
-                  onClick={handleEnterContest}
-                  className="px-8 py-3 bg-[#00C853] text-black font-bold rounded-xl"
-                >
-                  Draft Lineup
-                </button>
-              )}
-            </div>
-          )}
-
-          {activeTab === 'entries' && contest.entries.filter(e => currentUserId && e.oduserId === currentUserId).length > 0 && (
-            <div className="space-y-4">
-              <h3 className="text-lg font-bold text-white flex items-center gap-2 mb-4">
-                <Check size={20} className="text-[#00C853]" />
-                Your Entries
-              </h3>
-              
-              {contest.entries.filter(e => currentUserId && e.oduserId === currentUserId).map((entry, idx) => (
-                <div 
-                  key={entry.id}
-                  onClick={() => setSelectedEntry(entry)}
-                  className="bg-[#1A1A1A] border border-[#2A2A2A] rounded-xl p-4 cursor-pointer hover:bg-[#222]"
-                >
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-[#252525] flex items-center justify-center text-sm font-bold text-[#888]">
-                        {entry.username.charAt(0)}
-                      </div>
-                      <div>
-                        <div className="font-semibold text-white">Entry #{idx + 1}</div>
-                        <div className="text-xs text-[#666]">{entry.picks.length} picks</div>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-xl font-bold text-[#00C853]">{entry.totalPoints.toFixed(2)}</div>
-                      <div className="text-[10px] text-[#666]">potential pts</div>
-                    </div>
+          {activeTab === 'entries' && (() => {
+            // Find user's entries in this contest
+            const myEntries = contest.entries.filter(e => currentUserId && e.oduserId === currentUserId)
+            
+            if (myEntries.length === 0) {
+              return (
+                <div className="bg-[#1A1A1A] border border-[#2A2A2A] rounded-2xl p-8 text-center backdrop-blur-sm">
+                  <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-[#1A1A1A] flex items-center justify-center">
+                    <Users size={40} className="text-white/20" />
                   </div>
-                  
-                  <div className="flex flex-wrap gap-1.5">
-                    {entry.picks.slice(0, 5).map((pick, i) => (
-                      <div 
-                        key={i}
-                        className="text-[10px] rounded px-2 py-1 font-medium bg-[#252525] text-[#888]"
-                      >
-                        {pick.player.split(' ').pop()} {pick.line}+
-                      </div>
-                    ))}
-                  </div>
-                  
-                  <div className="mt-3 text-xs text-[#555] text-center">
-                    Click to view lineup
-                  </div>
+                  <h3 className="text-xl font-bold mb-2">Your Entries</h3>
+                  <p className="text-[#888888] mb-8 max-w-xs mx-auto">You haven't entered this contest yet. Draft your team to compete for cash prizes.</p>
+                  {contest.status === 'open' && (
+                    <button
+                      onClick={handleEnterContest}
+                      className="px-8 py-3 bg-[#00C853] text-black font-bold rounded-xl hover:bg-[#00DD00] transition-all hover:scale-105 shadow-md"
+                    >
+                      Draft Lineup
+                    </button>
+                  )}
                 </div>
-              ))}
-            </div>
-          )}
+              )
+            }
+            
+            return (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                    <Check size={20} className="text-[#00C853]" />
+                    Your Entries ({myEntries.length})
+                  </h3>
+                </div>
+                
+                {myEntries.map((entry, idx) => (
+                  <div 
+                    key={entry.id}
+                    onClick={() => setSelectedEntry(entry)}
+                    className="bg-[#1A1A1A] border border-[#00C853]/20 rounded-2xl p-4 cursor-pointer hover:bg-[#252525] transition-all"
+                  >
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-[#00C853]/20 border border-[#00C853]/30 flex items-center justify-center text-sm font-bold text-[#00C853]">
+                          {entry.username.charAt(0)}
+                        </div>
+                        <div>
+                          <div className="font-bold text-white flex items-center gap-2">
+                            Entry #{idx + 1}
+                            <span className="text-[9px] bg-[#00C853]/20 text-[#00C853] px-1.5 py-0.5 rounded">SUBMITTED</span>
+                          </div>
+                          <div className="text-xs text-[#888888]">
+                            {new Date(entry.submittedAt).toLocaleString()}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-xl font-bold text-[#00C853]" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                          {entry.totalPoints.toFixed(2)}
+                        </div>
+                        <div className="text-[10px] text-[#00C853]/50">potential pts</div>
+                      </div>
+                    </div>
+                    
+                    {/* Mini pick preview */}
+                    <div className="flex flex-wrap gap-1">
+                      {entry.picks.slice(0, 5).map((pick, i) => (
+                        <div 
+                          key={i}
+                          className="text-[10px] bg-[#1A1A1A] border border-[#333333] rounded px-2 py-1 text-[#888888]"
+                        >
+                          {pick.player.split(' ').pop()} {pick.line}+
+                        </div>
+                      ))}
+                    </div>
+                    
+                    <div className="mt-3 text-xs text-[#555555] text-center">
+                      Click to view full lineup →
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )
+          })()}
         </div>
       </main>
 
@@ -1119,4 +1135,3 @@ function PickCard({
     </div>
   )
 }
-
