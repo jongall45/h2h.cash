@@ -290,7 +290,7 @@ export default function ContestDetailPage() {
                     {formatTime(contest.gameTime)}
                   </span>
                   <span className={`px-2.5 py-1 rounded-full text-xs font-bold uppercase tracking-wide ${
-                    contest.status === 'open' ? 'bg-[#00C853]/20 text-[#00C853]' :
+                    contest.status === 'open' || contest.status === 'live' ? 'bg-[#00C853]/20 text-[#00C853]' :
                     contest.status === 'live' ? 'bg-red-500/20 text-red-500 animate-pulse' :
                     'bg-[#252525] text-[#888888]'
                   }`}>
@@ -322,7 +322,7 @@ export default function ContestDetailPage() {
             </div>
 
             {/* Progress & Action - Only show when contest is open */}
-            {contest.status === 'open' ? (
+            {contest.status === 'open' || contest.status === 'live' ? (
             <div className="flex flex-col md:flex-row items-center gap-6">
               <div className="w-full md:flex-1">
                 <div className="flex justify-between text-xs mb-2">
@@ -706,7 +706,7 @@ export default function ContestDetailPage() {
                   </div>
                   <h3 className="text-xl font-bold mb-2">Your Entries</h3>
                   <p className="text-[#888888] mb-8 max-w-xs mx-auto">You haven't entered this contest yet. Draft your team to compete for cash prizes.</p>
-                  {contest.status === 'open' && (
+                  {contest.status === 'open' || contest.status === 'live' && (
                     <button
                       onClick={handleEnterContest}
                       className="px-8 py-3 bg-[#00C853] text-black font-bold rounded-xl hover:bg-[#00DD00] transition-all hover:scale-105 shadow-md"
