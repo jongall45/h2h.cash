@@ -187,58 +187,28 @@ export async function submitEntry(
     picks: EntryPick[]
   }
 ): Promise<ContestEntry | null> {
-  // Calculate initial points (before games)
   const totalPoints = entry.picks.reduce((sum, p) => sum + p.points, 0)
   
-  try {
-    const { data, error } = await supabase
-      .from('entries')
-      .insert({
-        contest_id: contestId,
-        user_id: entry.userId,
-        username: entry.username,
-        picks: entry.picks,
-        total_points: totalPoints,
-        hits_count: 0,
-        is_perfect: false
-      })
-      .select()
-      .single()
-
-    if (error) {
-      console.error('Error submitting entry:', error.message, error.details, error.hint)
-      // For demo/development: return a mock entry if Supabase fails
-      return {
-        id: 'local-' + Date.now(),
-        oduserId: entry.userId,
-        username: entry.username,
-        picks: entry.picks,
-        totalPoints: totalPoints,
-        hitsCount: 0,
-        isPerfect: false,
-        rank: null,
-        prize: null,
-        submittedAt: new Date().toISOString()
-      }
-    }
-
-    return transformEntry(data as DbEntry)
-  } catch (err) {
-    console.error('Exception submitting entry:', err)
-    // Return mock entry for demo purposes
-    return {
-      id: 'local-' + Date.now(),
-      oduserId: entry.userId,
+  const { data, error } = await supabase
+    .from('entries')
+    .insert({
+      contest_id: contestId,
+      user_id: entry.userId,
       username: entry.username,
       picks: entry.picks,
-      totalPoints: totalPoints,
-      hitsCount: 0,
-      isPerfect: false,
-      rank: null,
-      prize: null,
-      submittedAt: new Date().toISOString()
-    }
+      total_points: totalPoints,
+      hits_count: 0,
+      is_perfect: false
+    })
+    .select()
+    .single()
+
+  if (error) {
+    console.error('Entry save failed:', error)
+    throw new Error(`Failed to save entry: ${error.message}`)
   }
+
+  return transformEntry(data as DbEntry)
 }
 
 // Get user's entries for a contest
