@@ -195,7 +195,7 @@ export async function getContestLiveStatus(): Promise<{
   const pending = games.filter(g => g.status.type === 'pre').length
   
   return {
-    hasGamesStarted: inProgress > 0 || completed > 0,
+    hasGamesStarted: inProgress > 0,
     hasGamesCompleted: completed > 0,
     allGamesCompleted: pending === 0 && inProgress === 0 && completed > 0,
     inProgressCount: inProgress,
